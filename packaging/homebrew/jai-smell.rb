@@ -11,6 +11,8 @@ class JaiSmell < Formula
   desc "Flags unnatural Japanese expressions in text written by Claude Code"
   homepage "https://github.com/bufferings/jai-smell"
   url "https://github.com/bufferings/jai-smell/releases/download/v{{VERSION}}/jai-smell-{{VERSION}}-arm64.tar.gz"
+  # URL の「arm64」から「64」をバージョンとして解析するため、明記する
+  version "{{VERSION}}"
   sha256 "{{SHA256}}"
   license "MIT"
 
@@ -33,7 +35,10 @@ class JaiSmell < Formula
 
   test do
     (testpath/"jai-smell.toml").write <<~TOML
-      [[entries]]
+      [[rule_sets]]
+      name = "test"
+
+      [[rule_sets.entries]]
       message = "found"
       tokens = [{ basic_form = "見張る" }]
     TOML
