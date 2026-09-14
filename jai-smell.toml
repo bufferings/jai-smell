@@ -1,0 +1,9 @@
+# このリポジトリのファイルにも jai-smell を適用する。
+# ただし、検出対象の言葉そのものを記述するテストとサンプルは対象外とする。
+exclude = [
+  "tests/**",
+  "src/matcher/tests.rs",
+  "src/suppress/tests.rs",
+  "examples/jai-smell.toml",
+  "packaging/homebrew/jai-smell.rb",
+]

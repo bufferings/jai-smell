@@ -1,0 +1,5 @@
+{
+  "name": "jai-smell",
+  "description": "Flags unnatural Japanese expressions in files and replies written by Claude Code, using the jai-smell command.",
+  "version": "0.1.0"
+}

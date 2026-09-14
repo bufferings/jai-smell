@@ -1,0 +1,92 @@
+//! Claude Code のプラグイン（.claude-plugin/ と plugin/）の内容と、フックから実行する check.sh を検証する。
+
+use std::fs;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output, Stdio};
+
+use serde_json::{Value, json};
+
+const BIN: &str = env!("CARGO_BIN_EXE_jai-smell");
+const REPOSITORY: &str = env!("CARGO_MANIFEST_DIR");
+const EXAMPLE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/jai-smell.toml");
+
+fn read_json(path: &str) -> Value {
+    serde_json::from_str(&fs::read_to_string(Path::new(REPOSITORY).join(path)).unwrap()).unwrap()
+}
+
+#[test]
+fn marketplace_lists_plugin_with_the_name_init_installs() {
+    let marketplace = read_json(".claude-plugin/marketplace.json");
+    let plugin = read_json("plugin/.claude-plugin/plugin.json");
+    assert_eq!(marketplace["name"], "jai-smell");
+    assert_eq!(marketplace["plugins"][0]["name"], "jai-smell");
+    assert_eq!(marketplace["plugins"][0]["source"], "./plugin");
+    assert_eq!(plugin["name"], "jai-smell");
+    assert_eq!(plugin["version"], env!("CARGO_PKG_VERSION"));
+}
+
+#[test]
+fn hooks_run_check_script_after_writes_and_replies() {
+    let hooks = read_json("plugin/hooks/hooks.json");
+    let post_tool_use = &hooks["hooks"]["PostToolUse"][0];
+    assert_eq!(post_tool_use["matcher"], "Edit|Write|MultiEdit");
+    assert_eq!(
+        post_tool_use["hooks"][0]["command"],
+        "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/check.sh"
+    );
+    let stop = &hooks["hooks"]["Stop"][0];
+    assert!(stop.get("matcher").is_none());
+    assert_eq!(
+        stop["hooks"][0]["command"],
+        "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/check.sh"
+    );
+}
+
+/// PATH に jai-smell を含めるかどうかを切り替えて、check.sh を実行する
+fn check(with_binary: bool) -> Output {
+    let home = std::env::temp_dir().join(format!(
+        "jai-smell-plugin-{}-{with_binary}",
+        std::process::id()
+    ));
+    let config = home.join(".config/jai-smell/jai-smell.toml");
+    fs::create_dir_all(config.parent().unwrap()).unwrap();
+    fs::copy(EXAMPLE, &config).unwrap();
+
+    let mut dirs: Vec<PathBuf> = vec!["/usr/bin".into(), "/bin".into()];
+    if with_binary {
+        dirs.insert(0, Path::new(BIN).parent().unwrap().to_path_buf());
+    }
+    let mut child = Command::new(Path::new(REPOSITORY).join("plugin/hooks/check.sh"))
+        .env("HOME", &home)
+        .env("PATH", std::env::join_paths(dirs).unwrap())
+        .stdin(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let input = json!({
+        "tool_name": "Edit",
+        "tool_input": { "file_path": home.join("doc.md"), "old_string": "x", "new_string": "CI が走る。" }
+    });
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.to_string().as_bytes())
+        .unwrap();
+    child.wait_with_output().unwrap()
+}
+
+#[test]
+fn check_script_passes_exit_code_through() {
+    let output = check(true);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("\"走る\""));
+}
+
+#[test]
+fn check_script_does_nothing_without_binary() {
+    let output = check(false);
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+}

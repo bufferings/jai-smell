@@ -1,0 +1,12 @@
+{
+  "name": "jai-smell",
+  "owner": {
+    "name": "bufferings"
+  },
+  "plugins": [
+    {
+      "name": "jai-smell",
+      "source": "./plugin"
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+# GitHub のリリースを公開すると、bufferings/homebrew-tap の Formula/jai-smell.rb を更新するワークフロー。
+# 下書きとプレリリースでは実行しないため、動作確認前の tar.gz を formula が参照することはない。
+#
+# sha256 は、公開されたリリースから tar.gz をダウンロードして再計算する。
+# ビルド時のログに出力された値ではなく、実際にダウンロードされるファイルと一致させるため。
+#
+# tap へのプッシュには、homebrew-tap の contents への書き込み権限を持つトークンを、シークレット TAP_PUSH_TOKEN に登録しておく必要がある。
+name: Bump formula
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  bump-formula:
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # main ではなくリリースのタグをチェックアウトし、そのリリース時点の formula テンプレートを使用する
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Download the release archive and hash it
+        id: archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          version="${tag#v}"
+          mkdir -p dist
+          gh release download "$tag" \
+            --repo "${{ github.repository }}" \
+            --pattern "jai-smell-$version-arm64.tar.gz" \
+            --dir dist
+          sha256="$(shasum -a 256 "dist/jai-smell-$version-arm64.tar.gz" | awk '{ print $1 }')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "sha256=$sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Check out bufferings/homebrew-tap
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          repository: bufferings/homebrew-tap
+          token: ${{ secrets.TAP_PUSH_TOKEN }}
+          path: tap
+
+      - name: Render the formula and push
+        run: |
+          version="${{ steps.archive.outputs.version }}"
+          mkdir -p tap/Formula
+          sed \
+            -e "s/{{VERSION}}/$version/g" \
+            -e "s/{{SHA256}}/${{ steps.archive.outputs.sha256 }}/g" \
+            packaging/homebrew/jai-smell.rb \
+            > tap/Formula/jai-smell.rb
+
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/jai-smell.rb
+          if git diff --cached --quiet; then
+            echo "formula に変更がないため、コミットをスキップする"
+            exit 0
+          fi
+          git commit -m "jai-smell $version"
+          git push
