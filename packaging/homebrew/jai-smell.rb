@@ -21,15 +21,16 @@ class JaiSmell < Formula
 
   def install
     bin.install "jai-smell"
-    pkgshare.install "jai-smell.toml"
+    pkgshare.install "jai-smell.toml", "preset-rules.toml", "custom-rules.toml"
     prefix.install "THIRD-PARTY-NOTICES.txt"
   end
 
   def caveats
     <<~EOS
-      Run the following to create ~/.config/jai-smell/jai-smell.toml
+      Run the following to create the config files in ~/.config/jai-smell
       and install the Claude Code plugin:
         jai-smell init
+      After upgrading, run jai-smell init again to update preset-rules.toml.
     EOS
   end
 

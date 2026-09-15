@@ -1,0 +1,20 @@
+# 利用者が追加するルールセット。~/.config/jai-smell/custom-rules.toml に配置する。
+# jai-smell init は、このファイルがすでに存在する場合は変更しない。
+#
+# rule_sets: 検出する表現をまとめたルールセット。このファイルには rule_sets のみを記述できる。
+#   name: ルールセットの名前。設定ファイルのエラーメッセージに表示する。
+#   include、exclude: このルールセットを適用するファイルと、対象外とするファイルの glob。
+#     形式は jai-smell.toml の include、exclude と同じ。相対パスは、このファイルのディレクトリを基準とする。
+#   entries: 検出する表現。tokens に指定した条件の並びと一致する、連続する形態素の並びを検出する。
+#     message: 検出した場合に出力するメッセージ。
+#     tokens: 形態素の条件の並び。条件に指定できるフィールドは surface_form, pos, pos_detail_1, pos_detail_2, pos_detail_3,
+#       conjugated_type, conjugated_form, basic_form, reading, pronunciation（IPADIC の項目。フィールド名は kuromoji に準拠）。
+#       値には文字列または文字列の配列を指定する。配列の場合は、いずれかの値に一致すれば条件を満たす。
+#
+# 記述例:
+# [[rule_sets]]
+# name = "表記の統一"
+#
+# [[rule_sets.entries]]
+# message = "\"サーバ\" は、表記を統一するため、「サーバー」と記述してください。"
+# tokens = [{ pos = "名詞", surface_form = "サーバ" }]

@@ -9,7 +9,8 @@ use serde_json::{Value, json};
 
 const BIN: &str = env!("CARGO_BIN_EXE_jai-smell");
 const REPOSITORY: &str = env!("CARGO_MANIFEST_DIR");
-const EXAMPLE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/jai-smell.toml");
+/// jai-smell init が作成するファイル
+const CONFIG_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/config");
 
 fn read_json(path: &str) -> Value {
     serde_json::from_str(&fs::read_to_string(Path::new(REPOSITORY).join(path)).unwrap()).unwrap()
@@ -72,9 +73,11 @@ fn check(with_binary: bool) -> Output {
         "jai-smell-plugin-{}-{with_binary}",
         std::process::id()
     ));
-    let config = home.join(".config/jai-smell/jai-smell.toml");
-    fs::create_dir_all(config.parent().unwrap()).unwrap();
-    fs::copy(EXAMPLE, &config).unwrap();
+    let config_dir = home.join(".config/jai-smell");
+    fs::create_dir_all(&config_dir).unwrap();
+    for name in ["jai-smell.toml", "preset-rules.toml", "custom-rules.toml"] {
+        fs::copy(Path::new(CONFIG_DIR).join(name), config_dir.join(name)).unwrap();
+    }
 
     let mut dirs: Vec<PathBuf> = vec!["/usr/bin".into(), "/bin".into()];
     if with_binary {

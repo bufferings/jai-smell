@@ -80,7 +80,7 @@ above as far as the program is concerned.
 p1ass/textlint-rule-preset-ai-words-ja
 https://github.com/p1ass/textlint-rule-preset-ai-words-ja
 
-Many entries in examples/jai-smell.toml, and the way they are written,
+Many entries in config/preset-rules.toml, and the way they are written,
 are based on the dictionary of this project.
 ===========================================================================
 

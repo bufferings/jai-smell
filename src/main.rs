@@ -25,10 +25,12 @@ const USAGE: &str = "\
       Claude Code の PostToolUse フックの JSON を stdin から読み込み、今回の編集で追加・変更された部分をチェックする。
       検出した場合は結果を stderr に出力して exit 2
   jai-smell init
-      ~/.config/jai-smell/jai-smell.toml が存在しない場合は設定ファイルのサンプルを作成し、Claude Code のプラグインをインストールする
+      ~/.config/jai-smell/ に設定ファイルを作成し、Claude Code のプラグインをインストールする。
+      jai-smell.toml と custom-rules.toml は存在しない場合のみ作成し、preset-rules.toml は常に最新の内容で上書きする
 
 設定ファイルには、チェックの対象とするファイル（include）と対象外とするファイル（exclude）、
 検出する表現をまとめたルールセット（rule_sets）を記述する。ルールセットごとにも include と exclude を指定できる。
+ルールセットは、rule_files に指定したファイルに記述することもできる。
 チェック対象のファイルのディレクトリから上位に向かって探索し、
 最初に見つかった jai-smell.toml のルールセットを ~/.config/jai-smell/jai-smell.toml のルールセットに追加する。
 トップレベルの include と exclude は、~/.config/jai-smell/jai-smell.toml ではそのファイルのルールセットに、
@@ -40,7 +42,7 @@ jai-smell.toml ではすべてのルールセットに適用する。
 ファイル内に jai-smell-disable-next-line（次の行）、jai-smell-disable（範囲の開始）と jai-smell-enable（範囲の終了）、
 jai-smell-disable-file（ファイル全体）を記述すると、その範囲の検出結果をチェックの対象外とする。
 コメントの後に空白区切りで表記を記述すると、その表記に一致する箇所のみを対象外とする。
-読み込んだ設定ファイル自体はチェックの対象外とする。";
+読み込んだ設定ファイルと rule_files のファイル自体はチェックの対象外とする。";
 
 enum Mode {
     Files(Vec<PathBuf>),

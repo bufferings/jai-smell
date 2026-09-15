@@ -4,11 +4,12 @@ Claude Code が作成した日本語の文章から、修正を検討すべき�
 
 プラグインには、日本語の文章規範として、Claude の返答に適用する出力スタイル `japanese-replies` と、技術文書の作成・推敲に使用するスキル `japanese-tech-writing` も含まれています。
 
-設定ファイルのサンプルには、次の 3 つのルールセットを収録しています。
+jai-smell が提供するプリセット（`preset-rules.toml`）には、次の 4 つのルールセットを収録しています。
 
 - 不自然な日本語化：英語の表現を日本語に置き換えた不自然な表現（`既定では`、`走る` など）
 - 比喩：物事を別のものにたとえた表現（`落とし穴`、`土台` など）
 - 話し言葉：文書では用いない話し言葉（`見る`、`使う` など）
+- 技術文書で一般的ではない用語：他の分野で用いる用語で、技術文書では一般的ではない表現（`地の文` など）
 
 文章を形態素解析（[Lindera](https://github.com/lindera/lindera) と IPADIC）で分割したうえで条件と比較するため、たとえば `穴` を検出対象に設定しても、`落とし穴` は検出されません。
 
@@ -22,10 +23,10 @@ docs/ci.md:5:11: "見る" は、文書では用いない話し言葉です。文
 
 ## 参考にした情報源
 
-設定ファイルのサンプルは、次の情報源を参考に作成しています。
+プリセットは、次の情報源を参考に作成しています。
 
 - [p1ass/textlint-rule-preset-ai-words-ja](https://github.com/p1ass/textlint-rule-preset-ai-words-ja)（MIT License）
-  - 「不自然な日本語化」と「比喩」の多くの項目と、その条件の記述は、このプリセットの辞書を元にしています。サンプルでは、該当する項目に「出典: p1ass」と記載しています。 <!-- jai-smell-disable-next-line 変わった -->
+  - 「不自然な日本語化」と「比喩」の多くの項目と、その条件の記述は、このプリセットの辞書を元にしています。プリセットでは、該当する項目に「出典: p1ass」と記載しています。 <!-- jai-smell-disable-next-line 変わった -->
 - [生成AI以前と以後でエンジニアの文章はどう変わったのか: Qiitaの7万記事を数えてみた話](https://nyosegawa.com/posts/qiita-writing-before-after-ai/)（逆瀬川ちゃんのブログ）
   - p1ass/textlint-rule-preset-ai-words-ja の辞書の元になった分析です。
 
@@ -49,7 +50,10 @@ jai-smell init
 
 `jai-smell init` は、次の処理を実行します。
 
-- `~/.config/jai-smell/jai-smell.toml` が存在しない場合は、設定ファイルのサンプルを作成します。すでに存在する場合は変更しません。
+- `~/.config/jai-smell/` に、次の 3 つの設定ファイルを作成します。
+  - `jai-smell.toml`：ユーザー全体の設定。すでに存在する場合は変更しません。
+  - `preset-rules.toml`：jai-smell が提供するルールセット（プリセット）。すでに存在する場合は、最新の内容で上書きします。
+  - `custom-rules.toml`：利用者が追加するルールセット。すでに存在する場合は変更しません。
 - Claude Code のプラグイン `jai-smell@jai-smell` をインストールします。`claude` コマンドが見つからない場合は、インストール手順を表示します。
 
 Homebrew の formula はインストール時にホームディレクトリへ書き込めないため、`brew install` の後に `jai-smell init` を実行してください。起動中の Claude Code のセッションには、次回の起動時から反映されます。
@@ -78,11 +82,13 @@ claude plugin install jai-smell@jai-smell
 
 ```sh
 brew upgrade jai-smell
+jai-smell init
 claude plugin marketplace update jai-smell
 claude plugin update jai-smell@jai-smell
 ```
 
-プラグインは `brew upgrade` ではアップデートされないため、`claude plugin` コマンドでアップデートしてください。
+- `preset-rules.toml` は `brew upgrade` では更新されないため、`jai-smell init` を実行して更新してください。
+- プラグインは `brew upgrade` ではアップデートされないため、`claude plugin` コマンドでアップデートしてください。
 
 ## 使い方
 
@@ -136,7 +142,7 @@ jai-smell docs/*.md
 
 - `.md` ファイルは、Markdown として解析します。コードブロック、インラインコード、HTML、リンクの URL はチェックの対象外です。
 - その他のファイル（`.ts` など）は、プレーンテキストとしてファイル全体をチェックします。コード中の日本語のコメントや文字列リテラルもチェックの対象です。
-- 設定の `exclude` に一致するファイル（`include` を指定した場合は、一致しないファイルも）と、読み込んだ設定ファイル自体は、チェックの対象外です。
+- 設定の `exclude` に一致するファイル（`include` を指定した場合は、一致しないファイルも）と、読み込んだ設定ファイルおよび `rule_files` に指定したファイル自体は、チェックの対象外です。
 
 ### 除外のコメント
 
@@ -164,12 +170,12 @@ jai-smell docs/*.md
 
 | 配置場所 | 用途 |
 | --- | --- |
-| `~/.config/jai-smell/jai-smell.toml` | ユーザー全体の設定。`jai-smell init` でサンプルを作成できます |
+| `~/.config/jai-smell/jai-smell.toml` | ユーザー全体の設定。`jai-smell init` で作成できます |
 | チェック対象のファイルと同じディレクトリ、またはその上位ディレクトリの `jai-smell.toml` | プロジェクトごとの設定 |
 
 チェック対象のファイルのディレクトリから上位に向かって探索し、最初に見つかった `jai-smell.toml` のルールセットを、ユーザー全体の設定のルールセットに追加します。どちらの設定ファイルも見つからない場合は、エラーになります。
 
-設定ファイルのサンプルは、[examples/jai-smell.toml](examples/jai-smell.toml) を参照してください。
+`jai-smell init` が作成するファイルの内容は、[config](config) ディレクトリを参照してください。
 
 ### include と exclude
 
@@ -189,14 +195,29 @@ exclude = ["docs/drafts/**"]
 
 | 記述した設定ファイル | 適用範囲 |
 | --- | --- |
-| ユーザー全体の設定 | ユーザー全体の設定のルールセットのみ |
+| ユーザー全体の設定 | ユーザー全体の設定と、その `rule_files` に指定したファイルのルールセットのみ |
 | プロジェクトの設定 | ユーザー全体の設定のルールセットを含む、すべてのルールセット |
 
 たとえば、ユーザー全体の設定に `exclude = ["~/src/team-project/**"]` を記述すると、そのプロジェクトではユーザー全体の設定のルールセットが適用されなくなります。プロジェクトの設定のルールセットは、引き続き適用されます。
 
+### rule_files
+
+ルールセットを記述したファイルを指定します。`jai-smell init` が作成する `jai-smell.toml` には、次のように記述されています。
+
+```toml
+rule_files = ["preset-rules.toml", "custom-rules.toml"]
+```
+
+- 絶対パス、`~/` から始まるパス、設定ファイルのディレクトリからの相対パスで指定できます。
+- 記述した順に、設定ファイルに直接記述した `rule_sets` より先に読み込みます。
+- 指定したファイルには、`rule_sets` のみを記述できます。
+- 指定したファイルのルールセットは、読み込み元の設定ファイルのルールセットとして扱います。トップレベルの `include` と `exclude` の適用範囲も、読み込み元の設定ファイルのルールセットと同じです。
+
+`preset-rules.toml` は `jai-smell init` を実行するたびに上書きされるため、ルールセットを追加する場合は `custom-rules.toml` に記述してください。プリセットのルールセットを適用しない場合は、`rule_files` から `preset-rules.toml` を削除します。
+
 ### rule_sets
 
-検出する表現を、ルールセットとしてまとめて指定します。
+検出する表現を、ルールセットとしてまとめて指定します。設定ファイル、または `rule_files` に指定したファイルに記述します。
 
 ```toml
 [[rule_sets]]
@@ -212,7 +233,7 @@ tokens = [{ pos = "動詞", pos_detail_1 = "自立", basic_form = "見る" }]
 | フィールド | 内容 |
 | --- | --- |
 | `name` | ルールセットの名前。設定ファイルのエラーメッセージに表示します |
-| `include` | このルールセットを適用するファイル。形式はトップレベルの `include` と同じです。省略した場合は、すべてのファイルに適用します |
+| `include` | このルールセットを適用するファイル。形式はトップレベルの `include` と同じで、相対パスはルールセットを記述したファイルのディレクトリを基準とします。省略した場合は、すべてのファイルに適用します |
 | `exclude` | このルールセットのみ対象外とするファイル。形式はトップレベルの `exclude` と同じです |
 | `entries` | 検出する表現 |
 
@@ -265,4 +286,4 @@ MIT License です（[LICENSE](LICENSE)）。
 
 - バイナリに含まれる IPADIC
 - バイナリに含まれる Rust のクレート
-- 設定ファイルのサンプルの記述にあたって参考にした [p1ass/textlint-rule-preset-ai-words-ja](https://github.com/p1ass/textlint-rule-preset-ai-words-ja)
+- プリセットの記述にあたって参考にした [p1ass/textlint-rule-preset-ai-words-ja](https://github.com/p1ass/textlint-rule-preset-ai-words-ja)

@@ -10,8 +10,13 @@ use serde_json::json;
 
 const BIN: &str = env!("CARGO_BIN_EXE_jai-smell");
 const REPOSITORY: &str = env!("CARGO_MANIFEST_DIR");
-/// リリースに同梱する設定ファイル。exclude は指定していない
-const CONFIG: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/jai-smell.toml");
+/// jai-smell init が作成する設定ファイル。exclude は指定していない
+const CONFIG: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/config/jai-smell.toml");
+/// CONFIG の rule_files に指定したファイル
+const RULE_FILES: [&str; 2] = [
+    concat!(env!("CARGO_MANIFEST_DIR"), "/config/preset-rules.toml"),
+    concat!(env!("CARGO_MANIFEST_DIR"), "/config/custom-rules.toml"),
+];
 const SAMPLE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/sample.md");
 /// サンプルの設定の検証用。1 行ごとに、修正前の文章（検出される）と修正後の文章（検出されない）を記述する
 const REWRITE_BEFORE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/rewrite_before.md");
@@ -72,12 +77,15 @@ impl Workspace {
         path
     }
 
-    /// ユーザー全体の設定として、リリースに同梱するサンプルを配置する
+    /// ユーザー全体の設定として、jai-smell init が作成するファイルを配置する
     fn with_home_config(self) -> Self {
-        self.write(
-            "home/.config/jai-smell/jai-smell.toml",
-            &fs::read_to_string(CONFIG).unwrap(),
-        );
+        for source in [CONFIG].iter().chain(&RULE_FILES) {
+            let name = Path::new(source).file_name().unwrap().to_str().unwrap();
+            self.write(
+                &format!("home/.config/jai-smell/{name}"),
+                &fs::read_to_string(source).unwrap(),
+            );
+        }
         self
     }
 
@@ -141,7 +149,7 @@ fn write(file_path: &str, content: &str) -> serde_json::Value {
 #[test]
 fn files_reports_findings_in_sample() {
     // 設定ファイルの相対パスは、カレントディレクトリを基準とする
-    let output = files(&["--config", "examples/jai-smell.toml", "tests/sample.md"]);
+    let output = files(&["--config", "config/jai-smell.toml", "tests/sample.md"]);
     assert_eq!(output.status.code(), Some(1));
     assert_eq!(
         findings(&output.stdout),
@@ -199,7 +207,7 @@ fn files_layers_project_file_on_home_config() {
 
 #[test]
 fn home_exclude_skips_only_home_rule_sets() {
-    let workspace = Workspace::new("home-exclude");
+    let workspace = Workspace::new("home-exclude").with_home_config();
     workspace.write(
         "home/.config/jai-smell/jai-smell.toml",
         &format!(
@@ -249,8 +257,8 @@ fn files_explains_missing_config() {
 }
 
 #[test]
-fn files_skips_config_itself() {
-    let output = files(&["--config", CONFIG, CONFIG]);
+fn files_skips_config_and_rule_files_themselves() {
+    let output = files(&["--config", CONFIG, CONFIG, RULE_FILES[0], RULE_FILES[1]]);
     assert_eq!(output.status.code(), Some(0));
     assert!(output.stdout.is_empty());
 }
@@ -345,10 +353,12 @@ fn hook_passes_code_without_japanese() {
 }
 
 #[test]
-fn hook_skips_config_itself() {
-    let output = hook(edit(CONFIG, "\"効く\" は"));
-    assert_eq!(output.status.code(), Some(0));
-    assert!(output.stderr.is_empty());
+fn hook_skips_config_and_rule_files_themselves() {
+    for file in [CONFIG].iter().chain(&RULE_FILES) {
+        let output = hook(edit(file, "\"効く\" は"));
+        assert_eq!(output.status.code(), Some(0), "{file}");
+        assert!(output.stderr.is_empty(), "{file}");
+    }
 }
 
 #[test]

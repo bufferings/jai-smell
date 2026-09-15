@@ -9,8 +9,16 @@ use std::process::Command;
 
 use crate::config;
 
-/// 作成する設定ファイルのサンプル。内容はリポジトリの examples/jai-smell.toml と同一
-const EXAMPLE: &str = include_str!("../examples/jai-smell.toml");
+/// 作成するファイル。内容はリポジトリの config/ の同名のファイルと同一
+const CONFIG: &str = include_str!("../config/jai-smell.toml");
+const PRESET_RULES: (&str, &str) = (
+    "preset-rules.toml",
+    include_str!("../config/preset-rules.toml"),
+);
+const CUSTOM_RULES: (&str, &str) = (
+    "custom-rules.toml",
+    include_str!("../config/custom-rules.toml"),
+);
 const MARKETPLACE: &str = "bufferings/jai-smell";
 const PLUGIN: &str = "jai-smell@jai-smell";
 
@@ -19,17 +27,21 @@ pub fn run() -> Result<bool, String> {
     let home = std::env::var_os("HOME")
         .map(PathBuf::from)
         .ok_or("HOME が設定されていません")?;
-    write_config(&config::home_file(&home))?;
+    let config_file = config::home_file(&home);
+    let dir = config_file.parent().unwrap_or(Path::new("/"));
+    fs::create_dir_all(dir).map_err(|e| format!("{} を作成できません: {e}", dir.display()))?;
+    // 利用者が記述するファイルは上書きしない。プリセットは利用者が変更しない前提のため、常に最新の内容にする
+    create_new(&config_file, CONFIG)?;
+    write_preset(&dir.join(PRESET_RULES.0), PRESET_RULES.1)?;
+    create_new(&dir.join(CUSTOM_RULES.0), CUSTOM_RULES.1)?;
     Ok(install_plugin(&home))
 }
 
 /// すでに存在する場合は上書きしない
-fn write_config(path: &Path) -> Result<(), String> {
-    let dir = path.parent().unwrap_or(Path::new("/"));
-    fs::create_dir_all(dir).map_err(|e| format!("{} を作成できません: {e}", dir.display()))?;
+fn create_new(path: &Path, content: &str) -> Result<(), String> {
     match OpenOptions::new().write(true).create_new(true).open(path) {
         Ok(mut file) => {
-            file.write_all(EXAMPLE.as_bytes())
+            file.write_all(content.as_bytes())
                 .map_err(|e| format!("{} に書き込めません: {e}", path.display()))?;
             println!("設定ファイル {} を作成しました。", path.display());
         }
@@ -41,6 +53,25 @@ fn write_config(path: &Path) -> Result<(), String> {
         }
         Err(e) => return Err(format!("{} を作成できません: {e}", path.display())),
     }
+    Ok(())
+}
+
+/// 内容が異なる場合は上書きする
+fn write_preset(path: &Path, content: &str) -> Result<(), String> {
+    let message = match fs::read_to_string(path) {
+        Ok(current) if current == content => {
+            println!(
+                "設定ファイル {} は最新のため、変更しません。",
+                path.display()
+            );
+            return Ok(());
+        }
+        Ok(_) => "更新しました",
+        Err(e) if e.kind() == ErrorKind::NotFound => "作成しました",
+        Err(e) => return Err(format!("{} を読み込めません: {e}", path.display())),
+    };
+    fs::write(path, content).map_err(|e| format!("{} に書き込めません: {e}", path.display()))?;
+    println!("設定ファイル {} を{message}。", path.display());
     Ok(())
 }
 

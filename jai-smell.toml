@@ -6,6 +6,7 @@ exclude = [
   "plugin/skills/**",
   "src/matcher/tests.rs",
   "src/suppress/tests.rs",
-  "examples/jai-smell.toml",
+  "config/preset-rules.toml",
+  "config/custom-rules.toml",
   "packaging/homebrew/jai-smell.rb",
 ]

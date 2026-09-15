@@ -61,7 +61,7 @@ jobs:
         run: |
           name="jai-smell-${{ steps.version.outputs.version }}"
           mkdir -p "dist/$name"
-          cp target/release/jai-smell LICENSE THIRD-PARTY-NOTICES.txt README.md examples/jai-smell.toml "dist/$name/"
+          cp target/release/jai-smell LICENSE THIRD-PARTY-NOTICES.txt README.md config/*.toml "dist/$name/"
           archive="dist/$name-arm64.tar.gz"
           tar -C dist -czf "$archive" "$name"
           shasum -a 256 "$archive"

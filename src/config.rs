@@ -5,6 +5,7 @@
 //! ユーザー全体の設定 ~/.config/jai-smell/jai-smell.toml のルールセットに追加する。
 //! トップレベルの include と exclude は、ユーザー全体の設定ではそのファイルのルールセットに、
 //! プロジェクトの設定ではすべてのルールセットに適用する。
+//! rule_files に指定したファイルのルールセットは、読み込み元の設定ファイルのルールセットとして扱う。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -12,11 +13,13 @@ use std::rc::Rc;
 
 use globset::{Glob, GlobBuilder, GlobSet, GlobSetBuilder};
 use serde::Deserialize;
+use serde::de::DeserializeOwned;
 
 use crate::dictionary::{Dictionary, Entry};
 
 const PROJECT_FILE: &str = "jai-smell.toml";
 const HOME_FILE: &str = ".config/jai-smell/jai-smell.toml";
+const HOME_REQUIRED: &str = "~/ から始まるパスを指定するには、HOME の設定が必要です";
 const SETUP: &str = "jai-smell init で ~/.config/jai-smell/jai-smell.toml を作成するか、チェック対象のファイルと同じディレクトリまたはその上位ディレクトリに jai-smell.toml を配置してください。";
 
 /// ユーザー全体の設定ファイルのパス
@@ -32,6 +35,17 @@ struct ConfigFile {
     /// チェックの対象外とするファイルの glob
     #[serde(default)]
     exclude: Vec<String>,
+    /// ルールセットを記述したファイル。記述した順に、この設定ファイルの rule_sets より先に読み込む
+    #[serde(default)]
+    rule_files: Vec<String>,
+    #[serde(default)]
+    rule_sets: Vec<RuleSetFile>,
+}
+
+/// rule_files に指定するファイル。rule_sets のみを記述できる
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RuleFile {
     #[serde(default)]
     rule_sets: Vec<RuleSetFile>,
 }
@@ -167,38 +181,54 @@ impl Config {
         for (path, file, scope) in files {
             let filter = Filter::new(file.include.as_deref(), &file.exclude, &base(&path), home)
                 .map_err(|e| context(&path, e))?;
-            parsed.push((path, file.rule_sets, scope, Rc::new(filter)));
+            // ルールセットを記述したファイルごとに、パスとルールセットの組を読み込む順に並べる
+            let mut sources = Vec::new();
+            for rule_file in &file.rule_files {
+                let source = resolve_file(rule_file, &base(&path), home)
+                    .and_then(|rule_path| {
+                        let rule_file: RuleFile = read(&rule_path)?;
+                        Ok((rule_path, rule_file.rule_sets))
+                    })
+                    .map_err(|e| context(&path, format!("rule_files: {e}")))?;
+                sources.push(source);
+            }
+            sources.push((path, file.rule_sets));
+            parsed.push((sources, scope, Rc::new(filter)));
         }
         let project_filter = parsed
             .iter()
-            .find(|(_, _, scope, _)| *scope == Scope::Project)
-            .map(|(_, _, _, filter)| filter.clone());
+            .find(|(_, scope, _)| *scope == Scope::Project)
+            .map(|(_, _, filter)| filter.clone());
 
         let mut paths = Vec::new();
         let mut rule_sets = Vec::new();
-        for (path, sets, scope, filter) in parsed {
-            for (i, rule_set) in sets.into_iter().enumerate() {
-                let RuleSetFile {
-                    name,
-                    include,
-                    exclude,
-                    entries,
-                } = rule_set;
-                let context = |e: String| context(&path, format!("rule_sets[{i}]（{name}）: {e}"));
-                let mut filters = vec![filter.clone()];
-                // ユーザー全体の設定のルールセットには、プロジェクトの設定のトップレベルの include と exclude も適用する
-                if let (Scope::Home, Some(project_filter)) = (scope, &project_filter) {
-                    filters.push(project_filter.clone());
+        for (sources, scope, filter) in parsed {
+            for (path, sets) in sources {
+                for (i, rule_set) in sets.into_iter().enumerate() {
+                    let RuleSetFile {
+                        name,
+                        include,
+                        exclude,
+                        entries,
+                    } = rule_set;
+                    let context =
+                        |e: String| context(&path, format!("rule_sets[{i}]（{name}）: {e}"));
+                    let mut filters = vec![filter.clone()];
+                    // ユーザー全体の設定のルールセットには、プロジェクトの設定のトップレベルの include と exclude も適用する
+                    if let (Scope::Home, Some(project_filter)) = (scope, &project_filter) {
+                        filters.push(project_filter.clone());
+                    }
+                    // ルールセット自身の include と exclude は、ルールセットを記述したファイルのディレクトリを基準とする
+                    let own = Filter::new(include.as_deref(), &exclude, &base(&path), home)
+                        .map_err(context)?;
+                    filters.push(Rc::new(own));
+                    rule_sets.push(RuleSet {
+                        dictionary: Dictionary::new(entries).map_err(context)?,
+                        filters,
+                    });
                 }
-                let own = Filter::new(include.as_deref(), &exclude, &base(&path), home)
-                    .map_err(context)?;
-                filters.push(Rc::new(own));
-                rule_sets.push(RuleSet {
-                    dictionary: Dictionary::new(entries).map_err(context)?,
-                    filters,
-                });
+                paths.push(path);
             }
-            paths.push(path);
         }
         Ok(Self { paths, rule_sets })
     }
@@ -216,7 +246,7 @@ fn home() -> Option<PathBuf> {
     std::env::var_os("HOME").map(PathBuf::from)
 }
 
-fn read(path: &Path) -> Result<ConfigFile, String> {
+fn read<T: DeserializeOwned>(path: &Path) -> Result<T, String> {
     let text = fs::read_to_string(path)
         .map_err(|e| format!("設定ファイル {} を読み込めません: {e}", path.display()))?;
     toml::from_str(&text)
@@ -236,6 +266,16 @@ fn glob_set(
     builder.build().map_err(|e| e.to_string())
 }
 
+/// rule_files に記述されたパスを解決する。絶対パスはそのまま使用し、~/ から始まるパスはホームディレクトリ、
+/// それ以外は設定ファイルのディレクトリを基準とする
+fn resolve_file(path: &str, base: &Path, home: Option<&Path>) -> Result<PathBuf, String> {
+    match path.strip_prefix("~/") {
+        Some(rest) => Ok(home.ok_or(HOME_REQUIRED)?.join(rest)),
+        // base.join は、path が絶対パスの場合は path を返す
+        None => Ok(base.join(path)),
+    }
+}
+
 /// 設定ファイルに記述された glob を、resolve の規則で絶対パスのパターンに変換して生成する
 fn glob(field: &str, pattern: &str, base: &Path, home: Option<&Path>) -> Result<Glob, String> {
     let pattern = resolve(pattern, base, home)?;
@@ -251,7 +291,7 @@ fn resolve(pattern: &str, base: &Path, home: Option<&Path>) -> Result<String, St
     let (dir, rest) = if pattern.starts_with('/') {
         return Ok(pattern.to_string());
     } else if let Some(rest) = pattern.strip_prefix("~/") {
-        let home = home.ok_or("~/ から始まるパスを指定するには、HOME の設定が必要です")?;
+        let home = home.ok_or(HOME_REQUIRED)?;
         (home, rest)
     } else {
         (base, pattern)
@@ -484,6 +524,56 @@ mod tests {
     }
 
     #[test]
+    fn reads_rule_files_before_own_rule_sets() {
+        let workspace = Workspace::new("rule-files");
+        let root = workspace.root.display().to_string();
+        workspace.write(
+            "home/.config/jai-smell/jai-smell.toml",
+            &format!(
+                "rule_files = [\"preset.toml\", \"~/rules/custom.toml\"]\nexclude = [\"{root}/skip/**\"]\n{}",
+                rule_set("own")
+            ),
+        );
+        workspace.write("home/.config/jai-smell/preset.toml", &rule_set("preset"));
+        workspace.write(
+            "home/rules/custom.toml",
+            "[[rule_sets]]\nname = \"custom\"\ninclude = [\"notes/**\"]\n\n[[rule_sets.entries]]\nmessage = \"custom\"\ntokens = [{ pos = \"名詞\" }]\n",
+        );
+
+        let config = workspace.discover("other/a.md").unwrap();
+        assert_eq!(messages(&config), ["preset", "custom", "own"]);
+        assert_eq!(config.paths.len(), 3);
+        // rule_files のルールセットの include は、そのファイルのディレクトリを基準とする
+        assert_eq!(
+            applied(&config, &format!("{root}/home/rules/notes/a.md")),
+            ["preset", "custom", "own"]
+        );
+        assert_eq!(
+            applied(&config, &format!("{root}/other/a.md")),
+            ["preset", "own"]
+        );
+        // 読み込み元の設定ファイルの exclude は、rule_files のルールセットにも適用する
+        assert!(applied(&config, &format!("{root}/skip/a.md")).is_empty());
+    }
+
+    #[test]
+    fn rejects_missing_or_invalid_rule_files() {
+        let workspace = Workspace::new("invalid-rule-files");
+        workspace.write("project/jai-smell.toml", "rule_files = [\"missing.toml\"]");
+        let error = workspace.discover("project/a.md").err().unwrap();
+        assert!(
+            error.contains("rule_files: 設定ファイル")
+                && error.contains("missing.toml を読み込めません"),
+            "{error}"
+        );
+
+        workspace.write("project/jai-smell.toml", "rule_files = [\"rules.toml\"]");
+        workspace.write("project/rules.toml", "exclude = [\"a/**\"]");
+        let error = workspace.discover("project/a.md").err().unwrap();
+        assert!(error.contains("rules.toml の形式が不正です"), "{error}");
+    }
+
+    #[test]
     fn works_with_only_one_of_home_and_project() {
         let workspace = Workspace::new("only-project");
         workspace.write("project/jai-smell.toml", &rule_set("project"));
@@ -509,7 +599,7 @@ mod tests {
     fn loads_repository_config() {
         Config::load(Path::new(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/examples/jai-smell.toml"
+            "/config/jai-smell.toml"
         )))
         .unwrap();
     }

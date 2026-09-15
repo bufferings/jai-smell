@@ -6,7 +6,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 const BIN: &str = env!("CARGO_BIN_EXE_jai-smell");
-const EXAMPLE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/jai-smell.toml");
+/// jai-smell init が作成するファイル
+const CONFIG_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/config");
+const FILES: [&str; 3] = ["jai-smell.toml", "preset-rules.toml", "custom-rules.toml"];
 const MANUAL: &str = "claude plugin marketplace add bufferings/jai-smell";
 
 struct Home {
@@ -22,8 +24,8 @@ impl Home {
         Self { root }
     }
 
-    fn config(&self) -> PathBuf {
-        self.root.join(".config/jai-smell/jai-smell.toml")
+    fn config(&self, name: &str) -> String {
+        fs::read_to_string(self.root.join(".config/jai-smell").join(name)).unwrap()
     }
 
     fn write(&self, path: &str, text: &str) -> PathBuf {
@@ -70,25 +72,43 @@ fn stdout(output: &Output) -> String {
 }
 
 #[test]
-fn writes_example_config_and_explains_plugin_install_without_claude() {
+fn writes_config_files_and_explains_plugin_install_without_claude() {
     let home = Home::new("no-claude");
     let output = home.init(&[]);
     assert_eq!(output.status.code(), Some(1));
-    assert_eq!(
-        fs::read_to_string(home.config()).unwrap(),
-        fs::read_to_string(EXAMPLE).unwrap()
-    );
+    for name in FILES {
+        assert_eq!(
+            home.config(name),
+            fs::read_to_string(Path::new(CONFIG_DIR).join(name)).unwrap(),
+            "{name}"
+        );
+    }
     assert!(stdout(&output).contains(MANUAL), "{}", stdout(&output));
 }
 
+/// 利用者が記述するファイルは変更せず、プリセットのみを最新の内容で上書きする
 #[test]
-fn keeps_existing_config() {
+fn keeps_user_files_and_overwrites_preset() {
     let home = Home::new("existing");
-    home.write(".config/jai-smell/jai-smell.toml", "# 利用者の設定\n");
-    home.init(&[]);
-    assert_eq!(
-        fs::read_to_string(home.config()).unwrap(),
-        "# 利用者の設定\n"
+    for name in FILES {
+        home.write(&format!(".config/jai-smell/{name}"), "# 既存の内容\n");
+    }
+    let output = home.init(&[]);
+    assert_eq!(home.config("jai-smell.toml"), "# 既存の内容\n");
+    assert_eq!(home.config("custom-rules.toml"), "# 既存の内容\n");
+    let preset = fs::read_to_string(Path::new(CONFIG_DIR).join("preset-rules.toml")).unwrap();
+    assert_eq!(home.config("preset-rules.toml"), preset);
+    assert!(
+        stdout(&output).contains("preset-rules.toml を更新しました"),
+        "{}",
+        stdout(&output)
+    );
+
+    let output = home.init(&[]);
+    assert!(
+        stdout(&output).contains("preset-rules.toml は最新のため"),
+        "{}",
+        stdout(&output)
     );
 }
 
