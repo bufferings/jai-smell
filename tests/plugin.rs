@@ -27,19 +27,42 @@ fn marketplace_lists_plugin_with_the_name_init_installs() {
 }
 
 #[test]
-fn hooks_run_check_script_after_writes_and_replies() {
+fn hooks_run_check_script_only_after_writes() {
     let hooks = read_json("plugin/hooks/hooks.json");
+    let events: Vec<&String> = hooks["hooks"].as_object().unwrap().keys().collect();
+    assert_eq!(events, ["PostToolUse"]);
     let post_tool_use = &hooks["hooks"]["PostToolUse"][0];
     assert_eq!(post_tool_use["matcher"], "Edit|Write|MultiEdit");
     assert_eq!(
         post_tool_use["hooks"][0]["command"],
         "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/check.sh"
     );
-    let stop = &hooks["hooks"]["Stop"][0];
-    assert!(stop.get("matcher").is_none());
-    assert_eq!(
-        stop["hooks"][0]["command"],
-        "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/check.sh"
+}
+
+/// Markdown の先頭の frontmatter（--- で囲まれた部分）を返す
+fn frontmatter(path: &str) -> String {
+    let text = fs::read_to_string(Path::new(REPOSITORY).join(path)).unwrap();
+    let rest = text.strip_prefix("---\n").unwrap();
+    rest.split_once("\n---\n").unwrap().0.to_string()
+}
+
+/// 出力スタイルは、Claude Code の組み込みの指示を保持し、利用者の outputStyle の設定を上書きしない
+#[test]
+fn output_style_keeps_coding_instructions_without_forcing() {
+    let frontmatter = frontmatter("plugin/output-styles/japanese-replies.md");
+    let lines: Vec<&str> = frontmatter.lines().collect();
+    assert!(lines.contains(&"name: japanese-replies"));
+    assert!(lines.contains(&"keep-coding-instructions: true"));
+    assert!(!frontmatter.contains("force-for-plugin"));
+}
+
+#[test]
+fn skill_name_matches_its_directory() {
+    let frontmatter = frontmatter("plugin/skills/japanese-tech-writing/SKILL.md");
+    assert!(
+        frontmatter
+            .lines()
+            .any(|line| line == "name: japanese-tech-writing")
     );
 }
 

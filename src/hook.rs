@@ -1,18 +1,10 @@
-//! Claude Code のフックの入力（JSON）から、チェック対象の文章を抽出する。
-//! PostToolUse では今回の編集で追加・変更された部分、Stop では Claude の最後の返答を対象とする。
+//! Claude Code の PostToolUse フックの入力（JSON）から、今回の編集で追加・変更された部分を抽出する。
 
 use serde::Deserialize;
 
 #[derive(Deserialize)]
 struct Input {
-    hook_event_name: Option<String>,
-    cwd: Option<String>,
     tool_input: Option<ToolInput>,
-    /// Stop
-    last_assistant_message: Option<String>,
-    /// Stop。Stop フックのフィードバックによって Claude が継続している場合は true
-    #[serde(default)]
-    stop_hook_active: bool,
 }
 
 #[derive(Deserialize)]
@@ -31,41 +23,17 @@ struct Edit {
     new_string: Option<String>,
 }
 
+/// ファイルの編集で追加・変更された部分。MultiEdit では編集ごとに分かれる
 #[derive(Debug, PartialEq)]
-pub enum Target {
-    /// ファイルの編集で追加・変更された部分。MultiEdit では編集ごとに分かれる
-    Written {
-        file_path: String,
-        parts: Vec<String>,
-    },
-    /// Claude の返答。cwd は設定ファイルの探索の起点
-    Reply { cwd: String, text: String },
-}
-
-/// チェック対象がない場合は None を返す
-pub fn target(input: &str) -> Result<Option<Target>, String> {
-    let input: Input = serde_json::from_str(input)
-        .map_err(|e| format!("フックの入力を JSON として解析できません: {e}"))?;
-    if input.hook_event_name.as_deref() == Some("Stop") {
-        return Ok(reply(input));
-    }
-    Ok(written(input))
-}
-
-/// Stop フックのフィードバックによって継続した返答はチェックしない。修正後の返答に対して、フィードバックが繰り返されることを防ぐため
-fn reply(input: Input) -> Option<Target> {
-    if input.stop_hook_active {
-        return None;
-    }
-    let text = input
-        .last_assistant_message
-        .filter(|text| !text.is_empty())?;
-    let cwd = input.cwd.unwrap_or_else(|| ".".to_string());
-    Some(Target::Reply { cwd, text })
+pub struct Target {
+    pub file_path: String,
+    pub parts: Vec<String>,
 }
 
 /// 追加・変更された部分がない場合は None を返す
-fn written(input: Input) -> Option<Target> {
+pub fn target(input: &str) -> Result<Option<Target>, String> {
+    let input: Input = serde_json::from_str(input)
+        .map_err(|e| format!("フックの入力を JSON として解析できません: {e}"))?;
     let Some(ToolInput {
         file_path: Some(file_path),
         content,
@@ -73,7 +41,7 @@ fn written(input: Input) -> Option<Target> {
         edits,
     }) = input.tool_input
     else {
-        return None;
+        return Ok(None);
     };
     let parts: Vec<String> = [content, new_string]
         .into_iter()
@@ -86,9 +54,9 @@ fn written(input: Input) -> Option<Target> {
         )
         .collect();
     if parts.iter().all(String::is_empty) {
-        return None;
+        return Ok(None);
     }
-    Some(Target::Written { file_path, parts })
+    Ok(Some(Target { file_path, parts }))
 }
 
 #[cfg(test)]
@@ -96,10 +64,9 @@ mod tests {
     use super::*;
 
     fn text(input: &str) -> Option<String> {
-        target(input).unwrap().map(|target| match target {
-            Target::Written { parts, .. } => parts.join("\n\n"),
-            Target::Reply { text, .. } => text,
-        })
+        target(input)
+            .unwrap()
+            .map(|target| target.parts.join("\n\n"))
     }
 
     #[test]
@@ -128,34 +95,6 @@ mod tests {
     }
 
     #[test]
-    fn takes_last_reply_on_stop() {
-        assert_eq!(
-            target(
-                r#"{ "hook_event_name": "Stop", "cwd": "/work", "stop_hook_active": false, "last_assistant_message": "返答" }"#
-            )
-            .unwrap(),
-            Some(Target::Reply {
-                cwd: "/work".into(),
-                text: "返答".into()
-            })
-        );
-    }
-
-    #[test]
-    fn skips_reply_continued_by_stop_hook_or_without_text() {
-        assert_eq!(
-            text(
-                r#"{ "hook_event_name": "Stop", "cwd": "/work", "stop_hook_active": true, "last_assistant_message": "返答" }"#
-            ),
-            None
-        );
-        assert_eq!(
-            text(r#"{ "hook_event_name": "Stop", "cwd": "/work", "stop_hook_active": false }"#),
-            None
-        );
-    }
-
-    #[test]
     fn returns_none_without_file_path_or_text() {
         assert_eq!(
             text(r#"{ "tool_name": "Bash", "tool_input": { "command": "ls" } }"#),
@@ -166,6 +105,17 @@ mod tests {
             None
         );
         assert_eq!(text(r#"{}"#), None);
+    }
+
+    /// 0.1.0 のプラグインは Stop フックでも jai-smell hook を実行するため、Stop の入力では何もしない
+    #[test]
+    fn ignores_stop_input_from_older_plugin() {
+        assert_eq!(
+            text(
+                r#"{ "hook_event_name": "Stop", "cwd": "/work", "stop_hook_active": false, "last_assistant_message": "返答" }"#
+            ),
+            None
+        );
     }
 
     #[test]

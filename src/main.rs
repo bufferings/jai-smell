@@ -17,32 +17,29 @@ use matcher::Tokenizer;
 
 const FILE_HEADING: &str = "修正を検討すべき表現の候補を検出しました。チェック対象は今回の編集で追加・変更された部分のみです（行番号はその部分の中での位置を示します）。各箇所を確認し、該当する場合のみ修正してください。";
 
-const REPLY_HEADING: &str = "直前の返答から、修正を検討すべき表現の候補を検出しました（行番号は返答の中での位置を示します）。この返答はすでにユーザーに表示されています。該当する箇所がある場合は、修正後の文章を改めて提示してください。表現そのものに言及している箇所は該当しません。";
-
 const USAGE: &str = "\
 使い方:
   jai-smell [--config <path>] <files...>
       ファイル全体をチェックし、検出結果を path:line:col: message の形式で出力する。検出した場合は exit 1
   jai-smell hook [--config <path>]
-      Claude Code のフックの JSON を stdin から読み込み、チェックする。
-      PostToolUse では今回の編集で追加・変更された部分をチェックし、検出した場合は結果を stderr に出力して exit 2。
-      Stop では Claude の最後の返答をチェックし、検出した場合は結果を additionalContext として stdout に出力する
+      Claude Code の PostToolUse フックの JSON を stdin から読み込み、今回の編集で追加・変更された部分をチェックする。
+      検出した場合は結果を stderr に出力して exit 2
   jai-smell init
       ~/.config/jai-smell/jai-smell.toml が存在しない場合は設定ファイルのサンプルを作成し、Claude Code のプラグインをインストールする
 
 設定ファイルには、チェックの対象とするファイル（include）と対象外とするファイル（exclude）、
 検出する表現をまとめたルールセット（rule_sets）を記述する。ルールセットごとにも include と exclude を指定できる。
-チェック対象のファイルのディレクトリ（Stop では Claude Code の作業ディレクトリ）から上位に向かって探索し、
+チェック対象のファイルのディレクトリから上位に向かって探索し、
 最初に見つかった jai-smell.toml のルールセットを ~/.config/jai-smell/jai-smell.toml のルールセットに追加する。
 トップレベルの include と exclude は、~/.config/jai-smell/jai-smell.toml ではそのファイルのルールセットに、
-jai-smell.toml ではすべてのルールセットに適用する。Claude の返答には適用しない。
+jai-smell.toml ではすべてのルールセットに適用する。
 --config を指定すると、指定したファイルのみを設定として使用する。
 
-.md と Claude の返答は Markdown として解析し、コードブロック、インラインコード、HTML、リンクの URL はチェックの対象外とする。
+.md は Markdown として解析し、コードブロック、インラインコード、HTML、リンクの URL はチェックの対象外とする。
 その他のファイルは、プレーンテキストとしてファイル全体をチェックする。
 ファイル内に jai-smell-disable-next-line（次の行）、jai-smell-disable（範囲の開始）と jai-smell-enable（範囲の終了）、
 jai-smell-disable-file（ファイル全体）を記述すると、その範囲の検出結果をチェックの対象外とする。
-コメントの後に空白区切りで表記を記述すると、その表記に一致する箇所のみを対象外とする。Claude の返答には適用しない。
+コメントの後に空白区切りで表記を記述すると、その表記に一致する箇所のみを対象外とする。
 読み込んだ設定ファイル自体はチェックの対象外とする。";
 
 enum Mode {
@@ -190,8 +187,7 @@ fn run_hook(args: &Args) -> Result<ExitCode, String> {
         .map_err(|e| format!("stdin を読み込めません: {e}"))?;
     match hook::target(&input)? {
         None => Ok(ExitCode::SUCCESS),
-        Some(Target::Written { file_path, parts }) => check_written(args, &file_path, &parts),
-        Some(Target::Reply { cwd, text }) => check_reply(args, Path::new(&cwd), &text),
+        Some(Target { file_path, parts }) => check_written(args, &file_path, &parts),
     }
 }
 
@@ -239,39 +235,6 @@ fn offset_in_file(parts: &[String], file_text: &str, offset: usize) -> Option<us
         start += part.len() + "\n\n".len();
     }
     None
-}
-
-/// 返答はすでにユーザーに表示されているため、ブロックせずに additionalContext として Claude にフィードバックする
-fn check_reply(args: &Args, cwd: &Path, text: &str) -> Result<ExitCode, String> {
-    let config = match &args.config {
-        Some(path) => Config::load(path)?,
-        None => Config::for_dir(cwd)?,
-    };
-    let rule_sets: Vec<&RuleSet> = config
-        .rule_sets
-        .iter()
-        .filter(|rule_set| rule_set.conversation)
-        .collect();
-    if rule_sets.is_empty() {
-        return Ok(ExitCode::SUCCESS);
-    }
-    // Claude の返答は Markdown で記述されるため、Markdown として解析する
-    let findings = to_findings(text, find_hits(&rule_sets, &Tokenizer::new()?, text, true)?);
-    if findings.is_empty() {
-        return Ok(ExitCode::SUCCESS);
-    }
-    let mut context = REPLY_HEADING.to_string();
-    for finding in findings {
-        context.push_str(&format!("\n返答:{finding}"));
-    }
-    let output = serde_json::json!({
-        "hookSpecificOutput": {
-            "hookEventName": "Stop",
-            "additionalContext": context,
-        }
-    });
-    println!("{output}");
-    Ok(ExitCode::SUCCESS)
 }
 
 /// 読み込んだ設定ファイル自体（検出対象の表現そのものを含む）はチェックの対象外とする

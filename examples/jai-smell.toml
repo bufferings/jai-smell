@@ -2,7 +2,7 @@
 #
 # プロジェクトごとの設定は、jai-smell.toml という名前でプロジェクトのディレクトリに配置する。
 # チェック対象のファイルのディレクトリから上位に向かって探索し、最初に見つかった jai-smell.toml のルールセットを、
-# この設定のルールセットに追加する。Claude の返答をチェックする場合は、Claude Code の作業ディレクトリから探索する。
+# この設定のルールセットに追加する。
 #
 # include: チェックの対象とするファイルの glob。省略した場合は、すべてのファイルを対象とする。空の配列は指定できない。
 # exclude: チェックの対象外とするファイルの glob。include に一致するファイルにも優先して適用する。
@@ -10,13 +10,11 @@
 #   * はディレクトリの区切りをまたがず、** はまたぐ。
 #   この設定ファイル（ユーザー全体の設定）に記述した場合は、この設定ファイルのルールセットにのみ適用する。
 #   jai-smell.toml（プロジェクトの設定）に記述した場合は、この設定ファイルのルールセットを含む、すべてのルールセットに適用する。
-#   Claude の返答には適用しない。
 # exclude = ["~/src/team-project/**"]
 #
 # rule_sets: 検出する表現をまとめたルールセット。
 #   name: ルールセットの名前。設定ファイルのエラーメッセージに表示する。
 #   include、exclude: このルールセットにのみ適用する include と exclude。形式は上記と同じ。
-#   conversation: Claude の返答に適用するかどうか。省略した場合は適用する。
 #   entries: 検出する表現。tokens に指定した条件の並びと一致する、連続する形態素の並びを検出する。
 #     条件に指定できるフィールドは surface_form, pos, pos_detail_1, pos_detail_2, pos_detail_3,
 #     conjugated_type, conjugated_form, basic_form, reading, pronunciation（IPADIC の項目。フィールド名は kuromoji に準拠）。

@@ -46,14 +46,7 @@ struct RuleSetFile {
     /// このルールセットのみ対象外とするファイルの glob
     #[serde(default)]
     exclude: Vec<String>,
-    /// Claude の返答に適用するかどうか。省略した場合は適用する
-    #[serde(default = "applies_to_conversation_by_default")]
-    conversation: bool,
     entries: Vec<Entry>,
-}
-
-fn applies_to_conversation_by_default() -> bool {
-    true
 }
 
 /// 設定ファイルの種類。トップレベルの include と exclude の適用範囲が異なる
@@ -105,8 +98,6 @@ pub struct RuleSet {
     pub dictionary: Dictionary,
     /// すべての Filter を満たすファイルに適用する
     filters: Vec<Rc<Filter>>,
-    /// Claude の返答に適用するかどうか
-    pub conversation: bool,
 }
 
 impl RuleSet {
@@ -133,19 +124,13 @@ impl Config {
     /// チェック対象のファイルに適用する設定を探索する
     pub fn for_file(file: &Path) -> Result<Self, String> {
         let file = std::path::absolute(file).map_err(|e| e.to_string())?;
-        let dir = file.parent().unwrap_or(Path::new("/"));
-        Self::discover(dir, &file, home().as_deref())
+        Self::discover(&file, home().as_deref())
     }
 
-    /// Claude の返答に適用する設定を、Claude Code の作業ディレクトリから探索する
-    pub fn for_dir(dir: &Path) -> Result<Self, String> {
-        let dir = std::path::absolute(dir).map_err(|e| e.to_string())?;
-        Self::discover(&dir, &dir, home().as_deref())
-    }
-
-    /// dir から上位に向かって jai-smell.toml を探索する。target はエラーメッセージに表示するチェック対象
-    fn discover(dir: &Path, target: &Path, home: Option<&Path>) -> Result<Self, String> {
+    /// file のディレクトリから上位に向かって jai-smell.toml を探索する。file は絶対パス
+    fn discover(file: &Path, home: Option<&Path>) -> Result<Self, String> {
         let mut files = Vec::new();
+        let dir = file.parent().unwrap_or(Path::new("/"));
         let project = dir
             .ancestors()
             .map(|dir| dir.join(PROJECT_FILE))
@@ -165,7 +150,7 @@ impl Config {
         if files.is_empty() {
             return Err(format!(
                 "{} に適用する設定ファイルが見つかりません。{SETUP}",
-                target.display()
+                file.display()
             ));
         }
         Self::build(files, home)
@@ -197,7 +182,6 @@ impl Config {
                     name,
                     include,
                     exclude,
-                    conversation,
                     entries,
                 } = rule_set;
                 let context = |e: String| context(&path, format!("rule_sets[{i}]（{name}）: {e}"));
@@ -212,7 +196,6 @@ impl Config {
                 rule_sets.push(RuleSet {
                     dictionary: Dictionary::new(entries).map_err(context)?,
                     filters,
-                    conversation,
                 });
             }
             paths.push(path);
@@ -362,7 +345,6 @@ mod tests {
             name = "docs"
             include = ["docs/**"]
             exclude = ["docs/drafts/**"]
-            conversation = false
 
             [[rule_sets.entries]]
             message = "docs"
@@ -381,8 +363,6 @@ mod tests {
         assert_eq!(applied(&config, "/repo/docs/drafts/a.md"), ["all"]);
         assert_eq!(applied(&config, "/repo/src/a.rs"), ["all"]);
         assert!(applied(&config, "/repo/tests/a.rs").is_empty());
-        assert!(!config.rule_sets[0].conversation);
-        assert!(config.rule_sets[1].conversation);
     }
 
     #[test]
@@ -481,13 +461,7 @@ mod tests {
         }
 
         fn discover(&self, file: &str) -> Result<Config, String> {
-            let file = self.root.join(file);
-            Config::discover(file.parent().unwrap(), &file, Some(&self.root.join("home")))
-        }
-
-        fn discover_dir(&self, dir: &str) -> Result<Config, String> {
-            let dir = self.root.join(dir);
-            Config::discover(&dir, &dir, Some(&self.root.join("home")))
+            Config::discover(&self.root.join(file), Some(&self.root.join("home")))
         }
     }
 
@@ -507,9 +481,6 @@ mod tests {
 
         let config = workspace.discover("other/a.md").unwrap();
         assert_eq!(messages(&config), ["home"]);
-
-        let config = workspace.discover_dir("project/sub").unwrap();
-        assert_eq!(messages(&config), ["home", "sub"]);
     }
 
     #[test]
