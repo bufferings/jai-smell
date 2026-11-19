@@ -33,12 +33,13 @@
 #   enabled: true を指定すると、textlint のルールを適用する。
 #   include、exclude: textlint のルールを適用するファイルと、対象外とするファイルの glob。
 #     include を省略した場合は、.md と .txt のファイルに適用する。
+#     ソースコードを指定した場合は、コメントに適用する。
 #   rules: ルールの名前ごとの設定。false を指定したルールは適用しない。
 #     true を指定したルールは、ルールのデフォルトのオプションで適用する。テーブルを指定した場合は、ルールのオプションとして使用する。
 #     no-mix-dearu-desumasu（文体の統一）は、統一する文体が文書によって異なるため、true またはオプションを指定した場合にのみ適用する。
 # [textlint]
 # enabled = true
-# include = ["**/*.md", "**/*.txt", "**/*.mdx"]
+# include = ["**/*.md", "**/*.txt", "**/*.ts", "**/*.py"]
 # [textlint.rules]
 # sentence-length = { max = 120 }
 # no-exclamation-question-mark = false

@@ -36,6 +36,8 @@ docs/ci.md:5:11: "見る" は、文書では用いない話し言葉です。文
 
 - [japanese-tech-writing/SKILL](https://gist.github.com/k16shikano/fd287c3133457c4fd8f5601d34aa817d)（k16shikano 氏、Unlicense）
 
+ソースコードのコメントと文字列リテラルの抽出には、[highlight.js](https://github.com/highlightjs/highlight.js)（BSD 3-Clause License）を使用しています。
+
 textlint のルールは、次のプロジェクトのものを変更せずに使用しています。
 
 - [textlint](https://github.com/textlint/textlint)（MIT License）
@@ -44,7 +46,7 @@ textlint のルールは、次のプロジェクトのものを変更せずに�
 ## 動作環境
 
 - macOS（Apple Silicon）。ビルド済みバイナリは、この環境向けのみ提供しています。その他の環境では、ソースからビルドしてください。
-- バイナリのサイズは約 106 MB です。JavaScript の実行環境（Bun）、textlint とルール、形態素解析の辞書を含みます。
+- バイナリのサイズは約 109 MB です。JavaScript の実行環境（Bun）、textlint とルール、形態素解析の辞書を含みます。
 - フックとして利用する場合は、[Claude Code](https://docs.claude.com/ja/docs/claude-code/overview) が必要です。
 
 ## インストール
@@ -159,10 +161,27 @@ jai-smell docs/*.md
 ### チェック対象
 
 - `.md` ファイルは、Markdown として解析します。コードブロック、インラインコード、HTML、リンクの URL はチェックの対象外です。
-- その他のファイル（`.ts` など）は、プレーンテキストとしてファイル全体をチェックします。コード中の日本語のコメントや文字列リテラルもチェックの対象です。
+- ソースコード（`.ts`、`.py`、`.rs` など）は、コメントと文字列リテラルをチェックします。詳細は[ソースコードのチェック](#ソースコードのチェック)を参照してください。
+- その他のファイル（`.txt`、`.yml` など）は、プレーンテキストとしてファイル全体をチェックします。
 - プリセットと追加のルールセットは、デフォルトではすべてのファイルに適用します。
 - textlint のルールは、設定で有効にした場合のみ適用します。適用するファイルのデフォルトは、`.md` と `.txt` です。
 - 設定の `exclude` に一致するファイルと、読み込んだ設定ファイルおよび `rule_files` に指定したファイル自体は、チェックの対象外です。
+
+### ソースコードのチェック
+
+ソースコードは、[highlight.js](https://highlightjs.org/) で構文を解析し、コメントと文字列リテラルを抽出してチェックします。識別子などのコードの記述と、文字列リテラルの中のコメントの記号（`"http://example.com"` の `//`）は、チェックの対象外です。
+
+| 対象 | プリセットと追加のルールセット | textlint のルール |
+| --- | --- | --- |
+| コメント | 適用します | `include` にファイルを指定した場合に適用します |
+| 文字列リテラル | 適用します | 適用しません。文の断片が多いためです |
+
+- 言語は、拡張子から判定します。対応する言語は、highlight.js が対応する言語です。
+- 連続する行コメントとブロックコメントは、コメントの記号（`//`、`*`、`#` など）を除いて、1 つの段落として扱います。同じ桁から始まる行は、折り返された文の続きとして連結します。箇条書きの項目と、字下げが異なる行は、別の文として扱います。
+- コードと同じ行に記述されたコメントは、前後の行のコメントとは別の段落として扱います。
+- フックでは、編集後のファイル全体からコメントを判定し、追加・変更された部分の検出結果のみを出力します。
+- 文章またはデータを記述するファイル（`.txt`、`.yml`、`.toml`、`.json`、`.html` など）と、言語を判定できないファイルは、ファイル全体をチェックします。言語を判定できないファイルには、textlint のルールを適用しません。
+- 言語によっては、コメントとして判定されない記述があります。たとえば、Python のドキュメント文字列は文字列リテラルとして扱い、Makefile のターゲットと同じ行のコメントは抽出しません。
 
 ### 除外のコメント
 
@@ -380,7 +399,7 @@ enabled = true
 ```toml
 [textlint]
 enabled = true
-include = ["**/*.md", "**/*.txt", "**/*.mdx"]
+include = ["**/*.md", "**/*.txt", "**/*.ts", "**/*.py"]
 
 [textlint.rules]
 sentence-length = { max = 120 }
@@ -396,10 +415,10 @@ no-mix-dearu-desumasu = true
 | `rules` | ルールの名前ごとの設定。`false` を指定したルールは適用しません。`true` を指定したルールは、ルールのデフォルトのオプションで適用します。テーブルを指定した場合は、ルールのオプションとして使用します |
 
 - どのフィールドも、チェック対象のファイルに近い設定ファイルの値を使用します。`include` と `exclude` は配列全体を、`rules` のオプションはルールごとにテーブル全体を置き換えます。
-- `include` を記述した場合は、デフォルトの `.md` と `.txt` に代えて使用します。`.md` 以外のファイルは、プレーンテキストとして処理します。
+- `include` を記述した場合は、デフォルトの `.md` と `.txt` に代えて使用します。
+- ソースコードを `include` に指定した場合は、コメントに適用します。文末の句点のルール（`ja-no-mixed-period`）は、`rules` に記述した場合にのみ、コメントに適用します。コメントでは、文末の句点を省略する書き方が一般的なためです。
 - `no-mix-dearu-desumasu`（「である」調と「ですます」調の統一）は、`true` またはオプションを指定した場合にのみ適用します。統一する文体は文書によって異なるためです。
 - ルールの名前とオプションは、[textlint-rule-preset-ja-technical-writing の README](https://github.com/textlint-ja/textlint-rule-preset-ja-technical-writing#readme) を参照してください。
-- ルールは文章を対象としているため、ソースコードに適用すると、コードの記述も検出されます。
 - 使用できるルールは、バイナリに含まれているものに限られます。textlint の他のルールは追加できません。
 
 ## アンインストール
@@ -419,5 +438,5 @@ MIT License です（[LICENSE](LICENSE)）。
 
 - バイナリに含まれる Bun の実行環境と、Bun が静的にリンクしている JavaScriptCore と WebKit（LGPL-2）。変更した JavaScriptCore を使用して jai-smell をビルドする方法も記載しています
 - バイナリに含まれる IPADIC
-- バイナリに含まれる npm のパッケージ（textlint、textlint のルール、kuromoji など）
+- バイナリに含まれる npm のパッケージ（textlint、textlint のルール、kuromoji、highlight.js など）
 - プリセットの記述にあたって参考にした [p1ass/textlint-rule-preset-ai-words-ja](https://github.com/p1ass/textlint-rule-preset-ai-words-ja)

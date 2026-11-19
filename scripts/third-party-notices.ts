@@ -2,17 +2,18 @@
 //   bun run notices
 // CI では再生成し、コミット済みのファイルとの差分がないことを確認する。
 //
-// package.json の dependencies から依存関係をたどり、バイナリに含まれる可能性のあるパッケージごとに、
-// ライセンスと、パッケージに同梱されている LICENSE と NOTICE のファイルの内容を出力する。
+// package.json の dependencies から依存関係を取得し、バイナリに含まれる可能性のあるパッケージを列挙する。
+// パッケージごとに、ライセンスと、同梱されている LICENSE と NOTICE のファイルの内容を出力する。
 // devDependencies は、バイナリに含まれないため対象外とする。
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
 
-// Bun の実行環境、IPADIC、プリセットの記述で参考にしたプロジェクトなど、npm のパッケージ以外の記載
-// scripts/licenses/ には、Bun のリポジトリ（.bun-version のバージョンのタグ）と、Bun が使用する WebKit のリポジトリから
-// 取得したライセンスのファイルを、変更せずに配置している。Bun のバージョンを変更した場合は、取得し直す。
+// npm のパッケージ以外の記載（Bun の実行環境、IPADIC、プリセットの記述で参考にしたプロジェクト）。
+// scripts/licenses/ には、取得したライセンスのファイルを変更せずに配置している。
+// 取得元は、Bun のリポジトリ（.bun-version のバージョンのタグ）と、Bun が使用する WebKit のリポジトリである。
+// Bun のバージョンを変更した場合は、再度取得する。
 const license = (name: string) =>
   readFileSync(join(import.meta.dir, "licenses", name), "utf8")
     .replace(/\r\n?/g, "\n")

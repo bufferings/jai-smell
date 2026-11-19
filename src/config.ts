@@ -26,7 +26,7 @@ const PROJECT_FILE = "jai-smell.toml";
 const HOME_FILE = ".config/jai-smell/jai-smell.toml";
 const HOME_REQUIRED = "~/ から始まるパスを指定するには、HOME の設定が必要です";
 
-/** textlint のルールを有効にした場合に、適用するファイルのデフォルト。ルールは文章を対象としているためである */
+/** textlint のルールを有効にした場合の、適用するファイルのデフォルト。ルールは文章を対象としているためである */
 const TEXTLINT_INCLUDE = ["**/*.md", "**/*.txt"];
 /**
  * プリセットのデフォルトでは有効で、jai-smell のデフォルトでは無効にする textlint のルール。

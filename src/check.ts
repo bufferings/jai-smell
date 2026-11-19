@@ -1,6 +1,7 @@
 // ファイルと、フックの入力のチェック。
 import { readFileSync, realpathSync } from "node:fs";
 import { extname, resolve } from "node:path";
+import { extract, fileKind } from "./code.ts";
 import { Config } from "./config.ts";
 import type { Target } from "./hook.ts";
 import { textRanges } from "./markdown.ts";
@@ -24,7 +25,7 @@ export type Finding = { line: number; column: number; message: string };
 export const formatFinding = (path: string, finding: Finding): string =>
   `${path}:${finding.line}:${finding.column}: ${finding.message}`;
 
-/** configPath を指定した場合は、探索を行わず、そのファイルのみを組み込みのデフォルトと統合する */
+/** configPath を指定した場合は、設定ファイルを探索せず、そのファイルのみを組み込みのデフォルトと統合する */
 export function configFor(configPath: string | undefined, file: string): Config {
   const config = configPath === undefined ? Config.forFile(file) : Config.load(configPath);
   for (const warning of config.warnings) {
@@ -66,14 +67,19 @@ export async function checkWritten(
     return [];
   }
   const text = parts.join("\n\n");
-  const hits = await findHits(config, filePath, text);
   // 除外のコメントは、編集後のファイル全体から読み込む。ファイルを読み込めない場合は、編集された部分から読み込む
-  let fileText = text;
+  let fileText: string | undefined;
   try {
     fileText = readFileSync(filePath, "utf8");
   } catch {
     // 編集された部分から読み込む
   }
+  const hits =
+    (fileText === undefined
+      ? undefined
+      : await findHitsInFile(config, filePath, parts, fileText)) ??
+    (await findHits(config, filePath, text));
+  fileText ??= text;
   const suppressions = parseSuppressions(fileText);
   return toFindings(
     text,
@@ -82,6 +88,42 @@ export async function checkWritten(
       return offset === undefined || !covers(suppressions, fileText, offset, hit.ruleName);
     }),
   );
+}
+
+/**
+ * ソースコードの場合に、編集後のファイル全体をチェックし、編集された部分の検出結果のみを、連結したテキスト内の位置で返す。
+ * 編集された部分のみでは、ブロックコメントの途中の行などを、コメントとして判定できないためである。
+ * ソースコードではない場合と、編集された部分がファイル内に見つからない場合は、undefined を返す
+ */
+async function findHitsInFile(
+  config: Config,
+  filePath: string,
+  parts: readonly string[],
+  fileText: string,
+): Promise<Hit[] | undefined> {
+  if (extname(filePath).toLowerCase() === ".md" || fileKind(filePath).kind !== "code") {
+    return undefined;
+  }
+  const located: { inFile: number; inJoined: number; length: number }[] = [];
+  let inJoined = 0;
+  for (const part of parts) {
+    const inFile = fileText.indexOf(part);
+    if (inFile === -1) {
+      return undefined;
+    }
+    located.push({ inFile, inJoined, length: part.length });
+    inJoined += part.length + "\n\n".length;
+  }
+  const hits: Hit[] = [];
+  for (const hit of await findHits(config, filePath, fileText)) {
+    const part = located.find(
+      ({ inFile, length }) => hit.offset >= inFile && hit.offset < inFile + length,
+    );
+    if (part) {
+      hits.push({ ...hit, offset: hit.offset - part.inFile + part.inJoined });
+    }
+  }
+  return hits.sort((a, b) => a.offset - b.offset);
 }
 
 /** 連結したテキスト内の位置を、編集後のファイル内の位置に変換する。編集された部分がファイル内に見つからない場合は undefined を返す */
@@ -106,34 +148,112 @@ function skipped(file: string, config: Config): boolean {
   return config.paths.some((path) => sameFile(file, path));
 }
 
+/** 文末の句点の有無など、コードのコメントには適さないため、設定に記述していない場合は、コメントに適用しないルール */
+const RULES_NOT_FOR_COMMENTS = ["ja-no-mixed-period"];
+
+/** チェックの対象とする文章。offsetOf は、text 内の位置を、ファイルのテキスト内の位置に変換する */
+type Part = { text: string; offsetOf: (index: number) => number };
+
+const slice = (source: string, { start, end }: { start: number; end: number }): Part => ({
+  text: source.slice(start, end),
+  offsetOf: (index) => start + index,
+});
+
+/** テキストから、形態素のルールでチェックする部分と、textlint のルールを適用する文章を決定する */
+function prepare(
+  file: string,
+  text: string,
+): { parts: Part[]; textlint?: Part & { markdown: boolean; comments: boolean } } {
+  const whole = slice(text, { start: 0, end: text.length });
+  if (extname(file).toLowerCase() === ".md") {
+    return {
+      parts: textRanges(text).map((range) => slice(text, range)),
+      textlint: { ...whole, markdown: true, comments: false },
+    };
+  }
+  const kind = fileKind(file);
+  if (kind.kind === "text") {
+    return { parts: [whole], textlint: { ...whole, markdown: false, comments: false } };
+  }
+  const extracted = kind.kind === "code" ? extract(text, kind.language) : undefined;
+  if (extracted === undefined) {
+    // 言語を判定できないファイルは、ファイル全体をプリセットと追加のルールセットのみでチェックする
+    return { parts: [whole] };
+  }
+  const comments: Part[] = extracted.comments.map(({ text, offsets }) => ({
+    text,
+    offsetOf: (index) => offsets[index] ?? offsets[offsets.length - 1] ?? 0,
+  }));
+  // textlint のルールには、コメントの段落を空行で区切って連結した文章を指定する
+  const separator = "\n\n";
+  const starts: number[] = [];
+  let length = 0;
+  for (const comment of comments) {
+    starts.push(length);
+    length += comment.text.length + separator.length;
+  }
+  return {
+    parts: [...comments, ...extracted.strings.map((range) => slice(text, range))],
+    // 文字列リテラルは文の断片が多いため、textlint のルールはコメントにのみ適用する
+    textlint: {
+      text: comments.map((comment) => comment.text).join(separator),
+      offsetOf: (index) => {
+        const i = Math.max(
+          0,
+          starts.findLastIndex((start) => start <= index),
+        );
+        return comments[i]?.offsetOf(index - (starts[i] ?? 0)) ?? 0;
+      },
+      markdown: false,
+      comments: true,
+    },
+  };
+}
+
 /** 検出結果を、出現位置の順に返す */
 async function findHits(config: Config, file: string, text: string): Promise<Hit[]> {
-  const markdown = extname(file).toLowerCase() === ".md";
   const hits: Hit[] = [];
   const entries = config.entriesFor(file);
+  const applyTextlint = config.appliesTextlintTo(file);
+  if (entries.length === 0 && !applyTextlint) {
+    return hits;
+  }
+  const prepared = prepare(file, text);
   if (entries.length > 0) {
-    const ranges = markdown ? textRanges(text) : [{ start: 0, end: text.length }];
-    for (const range of ranges) {
-      const tokens = await tokenize(text.slice(range.start, range.end));
+    for (const part of prepared.parts) {
       const seen = new Set<string>();
-      for (const hit of find(entries, tokens)) {
+      for (const hit of find(entries, await tokenize(part.text))) {
         // 同じルールが複数の設定に記述されている場合に、同じ検出結果を重複して出力しない
         const key = `${hit.start}:${hit.entry.message}`;
         if (!seen.has(key)) {
           seen.add(key);
-          hits.push({ offset: range.start + hit.start, message: hit.entry.message });
+          hits.push({ offset: part.offsetOf(hit.start), message: hit.entry.message });
         }
       }
     }
   }
-  if (config.appliesTextlintTo(file)) {
+  if (applyTextlint && prepared.textlint && prepared.textlint.text !== "") {
     // textlint とルールの読み込みには時間を要するため、適用する場合にのみ読み込む
     const textlint = await import("./textlint.ts");
-    const rules = textlint.resolveRules(config.textlint.items);
-    for (const hit of await textlint.lint(text, markdown, rules)) {
+    const items = { ...config.textlint.items };
+    if (prepared.textlint.comments) {
+      for (const name of RULES_NOT_FOR_COMMENTS) {
+        items[name] ??= false;
+      }
+    }
+    const rules = textlint.resolveRules(items);
+    for (const hit of await textlint.lint(
+      prepared.textlint.text,
+      prepared.textlint.markdown,
+      rules,
+    )) {
+      // sentence-length のメッセージの行番号は、コメントを連結した文章の中での位置のため、コメントの場合は出力しない
+      const message = prepared.textlint.comments
+        ? hit.message.replace(/^Line \d+ sentence length/, "Sentence length")
+        : hit.message;
       hits.push({
-        offset: hit.offset,
-        message: `${hit.message}（textlint: ${hit.ruleName}）`,
+        offset: prepared.textlint.offsetOf(hit.offset),
+        message: `${message}（textlint: ${hit.ruleName}）`,
         ruleName: hit.ruleName,
       });
     }

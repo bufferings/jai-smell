@@ -1,10 +1,10 @@
 // kuromoji の辞書（IPADIC）をバイナリに埋め込み、kuromojin が参照するディレクトリを指定する。
 //
-// kuromojin は、デフォルトでは node_modules の kuromoji のディレクトリから辞書を読み込むため、
-// bun build --compile で作成したバイナリは、ビルドした環境以外では辞書を読み込めない。
+// kuromojin は、デフォルトでは node_modules の kuromoji のディレクトリから辞書を読み込む。
+// そのため、bun build --compile で作成したバイナリは、ビルドした環境以外では辞書を読み込めない。
 // 辞書の各ファイルを with { type: "file" } で埋め込み、埋め込み先のディレクトリを環境変数 KUROMOJIN_DIC_PATH に設定する。
-// kuromoji はディレクトリとファイル名を連結して読み込むため、ビルド時に --asset-naming="[name].[ext]" を指定し、
-// 埋め込み後のファイル名を変更しない。
+// kuromoji は、ディレクトリとファイル名を連結して読み込む。
+// そのため、ビルド時に --asset-naming="[name].[ext]" を指定し、埋め込み後のファイル名を変更しない。
 import { dirname } from "node:path";
 import base from "../node_modules/kuromoji/dict/base.dat.gz" with { type: "file" };
 import cc from "../node_modules/kuromoji/dict/cc.dat.gz" with { type: "file" };

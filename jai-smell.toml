@@ -11,3 +11,5 @@ exclude = [
 
 [textlint]
 enabled = true
+# ソースコードのコメントにも適用する
+include = ["**/*.md", "**/*.txt", "**/*.ts", "**/*.sh"]

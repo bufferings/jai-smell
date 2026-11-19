@@ -7,6 +7,11 @@ import { edit, textlintFindings, Workspace, withPath, write } from "./helpers.ts
 const TEXT = "これは、長い、文で、読点が、多い、文です。\n\n確認できないわけではない。\n";
 const FINDINGS = ["1:14: max-ten", "3:11: no-double-negative-ja"];
 
+/** TEXT と同じ文章を、コメントとして記述したソースコード */
+const CODE =
+  "// これは、長い、文で、読点が、多い、文です。\nfn main() {}\n// 確認できないわけではない。\n";
+const CODE_FINDINGS = ["1:17: max-ten", "3:14: no-double-negative-ja"];
+
 /** textlint のルールを有効にする設定 */
 const ENABLED = "[textlint]\nenabled = true\n";
 
@@ -60,12 +65,38 @@ test("enabled と include で、ルールを適用するファイルを変更で
   workspace.write("work/drafts/jai-smell.toml", "[textlint]\nenabled = false\n");
   const doc = workspace.write("work/doc.md", TEXT);
   const draft = workspace.write("work/drafts/doc.md", TEXT);
-  const src = workspace.write("work/a.rs", TEXT);
+  const src = workspace.write("work/a.rs", CODE);
   let output = workspace.run([doc, draft, src]);
   expect(textlintFindings(output.stdout)).toEqual(withPath(doc, FINDINGS));
   workspace.write("work/jai-smell.toml", `${ENABLED}include = ["**/*.rs"]\n`);
   output = workspace.run([doc, src]);
-  expect(textlintFindings(output.stdout)).toEqual(withPath(src, FINDINGS));
+  expect(textlintFindings(output.stdout)).toEqual(withPath(src, CODE_FINDINGS));
+});
+
+test("ソースコードでは、コメントにのみルールを適用する", () => {
+  const workspace = new Workspace("textlint-code-comments");
+  workspace.write("work/jai-smell.toml", `${ENABLED}include = ["**/*.rs", "**/*.unknown"]\n`);
+  const src = workspace.write(
+    "work/a.rs",
+    [
+      // コードの括弧、?、カンマは検出しない
+      'fn main() { let x = f(a, b, c, d, e)?; if x { g("確認できないわけではない。") } }',
+      // 連続する行コメントは、1 つの文章として扱う。文末の句点がないことは検出しない
+      "// 確認できない",
+      "// わけではない",
+      "",
+    ].join("\n"),
+  );
+  // 言語を判定できないファイルには、ルールを適用しない
+  const unknown = workspace.write("work/a.unknown", TEXT);
+  const output = workspace.run([src, unknown]);
+  expect(textlintFindings(output.stdout)).toEqual(withPath(src, ["3:8: no-double-negative-ja"]));
+  // 文末の句点のルールは、設定に記述した場合は、コメントにも適用する
+  workspace.write(
+    "work/jai-smell.toml",
+    `${ENABLED}include = ["**/*.rs"]\n[textlint.rules]\nja-no-mixed-period = true\n`,
+  );
+  expect(textlintFindings(workspace.run([src]).stdout)).toContain(`${src}:3:9: ja-no-mixed-period`);
 });
 
 test("文体の統一のルールは、設定で有効にした場合にのみ適用する", () => {

@@ -258,6 +258,57 @@ test("フック: ソースコードはプレーンテキストとしてチェッ
   }
 });
 
+test("ソースコードは、コメントと文字列リテラルをチェックする", () => {
+  const workspace = new Workspace("code");
+  const src = workspace.write(
+    "work/app.ts",
+    [
+      "// 保存のたびに同期処理が",
+      "// 走る",
+      'const url = "http://example.com/走る"; // 設定を見張る',
+      "const 走る = 1;",
+      'throw new Error("キャッシュが効かない");',
+      "",
+    ].join("\n"),
+  );
+  const output = workspace.run([src]);
+  expect(findings(output.stdout)).toEqual(
+    withPath(src, [
+      // 連続する行コメントは、1 つの文章としてチェックする
+      '2:4: "走る"',
+      // 文字列リテラルの中の // は、コメントとして扱わない
+      '3:33: "走る"',
+      '3:44: "見張る"',
+      '5:24: "効く"',
+    ]),
+  );
+});
+
+test("言語を判定できないファイルと、データを記述するファイルは、ファイル全体をチェックする", () => {
+  const workspace = new Workspace("whole-text");
+  const unknown = workspace.write("work/notes.unknown", "CI が走る。\n");
+  const yaml = workspace.write("work/a.yml", "title: CI が走る\n");
+  const output = workspace.run([unknown, yaml]);
+  expect(findings(output.stdout)).toEqual([
+    ...withPath(unknown, ['1:5: "走る"']),
+    ...withPath(yaml, ['1:12: "走る"']),
+  ]);
+});
+
+test("フック: ソースコードは、編集後のファイル全体からコメントを判定する", () => {
+  const workspace = new Workspace("hook-code");
+  const file = workspace.write(
+    "work/app.ts",
+    "/**\n * 設定を読み込む。\n * ログを見張る。\n */\nconst 見張る = 1;\n",
+  );
+  // 編集された部分のみでは、ブロックコメントの途中の行をコメントとして判定できない
+  let output = workspace.hook(edit(file, " * ログを見張る。\n"));
+  expect(output.code).toBe(2);
+  expect(findings(output.stderr)).toEqual([`${file}:1:7: "見張る"`]);
+  output = workspace.hook(edit(file, "const 見張る = 1;\n"));
+  expect(output.code).toBe(0);
+});
+
 test("フック: 日本語を含まないコードは検出しない", () => {
   const output = hook(
     write(
@@ -280,10 +331,10 @@ test("フック: 設定ファイルと rule_files のファイル自体は、チ
 test("フック: 編集されたファイルの位置から、プロジェクトの設定を探索する", () => {
   const workspace = new Workspace("hook").withHomeConfig();
   workspace.write("work/jai-smell.toml", 'exclude = ["tests/**"]');
-  let output = workspace.hook(edit(workspace.path("work/tests/a.rs"), "CI が走る。"));
+  let output = workspace.hook(edit(workspace.path("work/tests/a.rs"), "// CI が走る。"));
   expect(output.code).toBe(0);
   expect(output.stderr).toBe("");
-  output = workspace.hook(edit(workspace.path("work/src/a.rs"), "CI が走る。"));
+  output = workspace.hook(edit(workspace.path("work/src/a.rs"), "// CI が走る。"));
   expect(output.code).toBe(2);
 });
 

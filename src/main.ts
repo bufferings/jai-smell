@@ -32,6 +32,7 @@ jai-smell.toml の順に統合し、チェック対象のファイルに近い�
   textlint: textlint のルールの設定（enabled、include、exclude、rules）
 
 .md は Markdown として解析し、コードブロック、インラインコード、HTML、リンクの URL はチェックの対象外とする。
+ソースコードは、コメントと文字列リテラルをチェックする。textlint のルールは、コメントにのみ適用する。
 その他のファイルは、プレーンテキストとしてファイル全体をチェックする。
 ファイル内に jai-smell-disable-next-line（次の行）、jai-smell-disable（範囲の開始）と jai-smell-enable（範囲の終了）、
 jai-smell-disable-file（ファイル全体）を記述すると、その範囲の検出結果をチェックの対象外とする。
