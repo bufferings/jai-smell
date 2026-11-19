@@ -30,20 +30,11 @@ class JaiSmell < Formula
       Run the following to create the config files in ~/.config/jai-smell
       and install the Claude Code plugin:
         jai-smell init
-      After upgrading, run jai-smell init again to update preset-rules.toml.
     EOS
   end
 
   test do
-    (testpath/"jai-smell.toml").write <<~TOML
-      [[rule_sets]]
-      name = "test"
-
-      [[rule_sets.entries]]
-      message = "found"
-      tokens = [{ basic_form = "見張る" }]
-    TOML
     (testpath/"a.md").write "ログを見張る。\n"
-    assert_match "a.md:1:4: found", shell_output("#{bin}/jai-smell a.md", 1)
+    assert_match "a.md:1:4: \"見張る\"", shell_output("#{bin}/jai-smell a.md", 1)
   end
 end

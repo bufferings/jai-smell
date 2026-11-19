@@ -1,0 +1,2 @@
+# テスト用の設定。プリセットと config/custom-rules.toml のルールセットのみを適用する。
+rule_files = ["../config/custom-rules.toml"]

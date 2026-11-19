@@ -1,23 +1,47 @@
 # jai-smell のユーザー全体の設定ファイル。~/.config/jai-smell/jai-smell.toml に配置する。
 # jai-smell init は、このファイルがすでに存在する場合は変更しない。
 #
-# プロジェクトごとの設定は、jai-smell.toml という名前でプロジェクトのディレクトリに配置する。
-# チェック対象のファイルのディレクトリから上位に向かって探索し、最初に見つかった jai-smell.toml のルールセットを、
-# この設定のルールセットに追加する。
+# 設定ファイルがない場合や、何も記述していない場合は、組み込みのデフォルトを使用する。
+#   プリセット（jai-smell が提供するルールセット）: すべてのファイルに適用する。内容は jai-smell preset で出力できる。
+#   textlint のルール（textlint-rule-preset-ja-technical-writing）: 適用しない。
 #
-# rule_files: ルールセットを記述したファイル。記述した順に、この設定ファイルの rule_sets より先に読み込む。
+# 設定は、この設定ファイル、チェック対象のファイルの上位のディレクトリにある jai-smell.toml の順に統合し、
+# チェック対象のファイルに近い設定ファイルの指定を優先する。
+# あるファイルに適用する設定は、jai-smell config <file> で出力できる。
+#
+# glob の形式: 絶対パス、~/ から始まるパス、相対パスで指定する。* はディレクトリの区切りをまたがず、** はまたぐ。
+#   相対パスは、この設定ファイル（ユーザー全体の設定）では / を、その他の jai-smell.toml ではそのディレクトリを基準とする。
+#
+# exclude: チェックの対象外とするファイルの glob。すべての設定ファイルの指定を合わせて、すべてのチェックに適用する。
+# exclude = ["~/src/team-project/**", "**/CHANGELOG.md"]
+#
+# rule_files: 追加するルールセットを記述したファイル。
 #   絶対パス、~/ から始まるパス、この設定ファイルのディレクトリからの相対パスで指定する。
-#   preset-rules.toml: jai-smell が提供するルールセット。jai-smell init を実行するたびに上書きされる。
 #   custom-rules.toml: 利用者が追加するルールセット。jai-smell init は、すでに存在する場合は変更しない。
-#
-# include: チェックの対象とするファイルの glob。省略した場合は、すべてのファイルを対象とする。空の配列は指定できない。
-# exclude: チェックの対象外とするファイルの glob。include に一致するファイルにも優先して適用する。
-#   絶対パス、~/ から始まるパス、この設定ファイルのディレクトリからの相対パスで指定する。
-#   * はディレクトリの区切りをまたがず、** はまたぐ。
-#   この設定ファイル（ユーザー全体の設定）に記述した場合は、この設定ファイルと rule_files のルールセットにのみ適用する。
-#   jai-smell.toml（プロジェクトの設定）に記述した場合は、この設定ファイルのルールセットを含む、すべてのルールセットに適用する。
-# exclude = ["~/src/team-project/**"]
-#
 # rule_sets: この設定ファイルに直接記述するルールセット。形式は custom-rules.toml を参照。
+#
+# preset: プリセットの設定。
+#   enabled: false を指定すると、プリセットを適用しない。
+#   include、exclude: プリセットを適用するファイルと、対象外とするファイルの glob。
+#   rule_sets: プリセットのルールセットの名前ごとの設定。false を指定したルールセットは適用しない。
+# [preset]
+# include = ["**/*.md"]
+# [preset.rule_sets]
+# "比喩" = false
+#
+# textlint: textlint のルールの設定。
+#   enabled: true を指定すると、textlint のルールを適用する。
+#   include、exclude: textlint のルールを適用するファイルと、対象外とするファイルの glob。
+#     include を省略した場合は、.md と .txt のファイルに適用する。
+#   rules: ルールの名前ごとの設定。false を指定したルールは適用しない。
+#     true を指定したルールは、ルールのデフォルトのオプションで適用する。テーブルを指定した場合は、ルールのオプションとして使用する。
+#     no-mix-dearu-desumasu（文体の統一）は、統一する文体が文書によって異なるため、true またはオプションを指定した場合にのみ適用する。
+# [textlint]
+# enabled = true
+# include = ["**/*.md", "**/*.txt", "**/*.mdx"]
+# [textlint.rules]
+# sentence-length = { max = 120 }
+# no-exclamation-question-mark = false
+# no-mix-dearu-desumasu = true
 
-rule_files = ["preset-rules.toml", "custom-rules.toml"]
+rule_files = ["custom-rules.toml"]

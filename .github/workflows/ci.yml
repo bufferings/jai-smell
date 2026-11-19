@@ -1,4 +1,4 @@
-# プッシュとプルリクエストのたびに、ローカルで実行しているチェック（fmt、clippy、test）を実行する。
+# プッシュとプルリクエストのたびに、ローカルで実行しているチェック（フォーマット、lint、型、テスト）を実行する。
 # 配布するバイナリと同じ arm64 の macOS で実行する。
 name: CI
 
@@ -14,32 +14,31 @@ jobs:
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
-      - name: Format
-        run: cargo fmt --check
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
 
-      - name: Clippy
-        run: cargo clippy --all-targets --locked -- -D warnings
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Format, lint, and type check
+        run: bun run check
 
       - name: Test
-        run: cargo test --locked
-
-      - name: Install cargo-about
-        # THIRD-PARTY-NOTICES.txt の生成に使用する。ビルド済みバイナリの sha256 を検証してからインストールする
-        run: |
-          version=0.9.2
-          sha256=ae72f0df0c399a1e96336f696fa55b1b28679fd725632eba8cf8e4568467cc3e
-          name="cargo-about-$version-aarch64-apple-darwin"
-          curl -fsSL -o "$RUNNER_TEMP/$name.tar.gz" \
-            "https://github.com/EmbarkStudios/cargo-about/releases/download/$version/$name.tar.gz"
-          echo "$sha256  $RUNNER_TEMP/$name.tar.gz" | shasum -a 256 -c -
-          tar -xzf "$RUNNER_TEMP/$name.tar.gz" -C "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP/$name" >> "$GITHUB_PATH"
+        run: bun test
 
       - name: Third-party notices
-        # about.hbs、about.toml、Cargo.lock の変更後に THIRD-PARTY-NOTICES.txt を再生成していない場合は失敗させる
+        # 依存関係の変更後に THIRD-PARTY-NOTICES.txt を再生成していない場合は失敗させる
         run: |
-          cargo about generate about.hbs -o THIRD-PARTY-NOTICES.txt
+          bun run notices
           git diff --exit-code THIRD-PARTY-NOTICES.txt
+
+      - name: Build
+        run: bun run build
+
+      - name: Smoke test
+        # バイナリが node_modules を参照せずに単体で動作することを確認する
+        run: sh scripts/smoke-test.sh
 
       - name: Formula template check
         # packaging/homebrew/jai-smell.rb のプレースホルダーをダミーの値に置換して brew style を実行し、

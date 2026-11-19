@@ -21,47 +21,46 @@ jobs:
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+
       - name: Resolve version
         id: version
         run: |
-          version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
+          version="$(jq -r '.version' package.json)"
           if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
-            echo "::error::タグ $GITHUB_REF_NAME が Cargo.toml の version $version と一致しません"
+            echo "::error::タグ $GITHUB_REF_NAME が package.json の version $version と一致しません"
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
       - name: Test
-        run: cargo test --locked
+        run: bun test
 
       - name: Build
         run: |
           # 配布するのは arm64 のバイナリのみのため、ランナーのアーキテクチャが変更された場合に検知する
           test "$(uname -m)" = arm64
-          cargo build --release --locked
+          bun run build
 
-      - name: Install cargo-about
-        # THIRD-PARTY-NOTICES.txt の生成に使用する。ビルド済みバイナリの sha256 を検証してからインストールする
-        run: |
-          version=0.9.2
-          sha256=ae72f0df0c399a1e96336f696fa55b1b28679fd725632eba8cf8e4568467cc3e
-          name="cargo-about-$version-aarch64-apple-darwin"
-          curl -fsSL -o "$RUNNER_TEMP/$name.tar.gz" \
-            "https://github.com/EmbarkStudios/cargo-about/releases/download/$version/$name.tar.gz"
-          echo "$sha256  $RUNNER_TEMP/$name.tar.gz" | shasum -a 256 -c -
-          tar -xzf "$RUNNER_TEMP/$name.tar.gz" -C "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP/$name" >> "$GITHUB_PATH"
+      - name: Smoke test
+        # バイナリが node_modules を参照せずに単体で動作することを確認する
+        run: sh scripts/smoke-test.sh
 
       - name: Generate third-party notices
         # 差分がないことは CI で確認済みだが、tar.gz に同梱するファイルはリリース時に再生成する
-        run: cargo about generate about.hbs -o THIRD-PARTY-NOTICES.txt
+        run: bun run notices
 
       - name: Package
         id: package
         run: |
           name="jai-smell-${{ steps.version.outputs.version }}"
           mkdir -p "dist/$name"
-          cp target/release/jai-smell LICENSE THIRD-PARTY-NOTICES.txt README.md config/*.toml "dist/$name/"
+          cp dist/jai-smell LICENSE THIRD-PARTY-NOTICES.txt README.md config/*.toml "dist/$name/"
           archive="dist/$name-arm64.tar.gz"
           tar -C dist -czf "$archive" "$name"
           shasum -a 256 "$archive"

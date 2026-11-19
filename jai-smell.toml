@@ -1,12 +1,13 @@
-# このリポジトリのファイルにも jai-smell を適用する。
+# このリポジトリのファイルにも jai-smell を適用する。textlint のルールも適用する。
 # ただし、検出対象の言葉そのものを記述するテスト、サンプル、文章規範（悪い例として引用する）は対象外とする。
 exclude = [
   "tests/**",
   "plugin/output-styles/**",
   "plugin/skills/**",
-  "src/matcher/tests.rs",
-  "src/suppress/tests.rs",
   "config/preset-rules.toml",
   "config/custom-rules.toml",
   "packaging/homebrew/jai-smell.rb",
 ]
+
+[textlint]
+enabled = true

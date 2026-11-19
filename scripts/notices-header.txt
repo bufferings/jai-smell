@@ -1,0 +1,80 @@
+jai-smell includes material from the following third parties.
+
+===========================================================================
+Bun runtime, embedded in the jai-smell binary by "bun build --compile"
+https://github.com/oven-sh/bun
+===========================================================================
+
+The jai-smell binary contains the Bun runtime. Bun itself is MIT-licensed.
+Bun statically links JavaScriptCore and WebKit, which are licensed under the
+GNU Library General Public License version 2 (LGPL-2). The source code of
+the JavaScriptCore and WebKit used by Bun is available at:
+https://github.com/oven-sh/WebKit
+
+To run jai-smell with a modified version of these libraries:
+
+1. Build Bun with the modified libraries by following the instructions in
+   Bun's LICENSE.md, which is reproduced below.
+2. Get the jai-smell source code, which is the complete application in a
+   form that can be relinked, from https://github.com/bufferings/jai-smell
+3. With the Bun built in step 1, run the following in the jai-smell source
+   tree to produce a new jai-smell binary:
+     bun install --frozen-lockfile
+     bun run build
+
+The version of Bun used to build a release is recorded in the .bun-version
+file of the jai-smell source code at the release tag.
+
+---------------------------------------------------------------------------
+Bun's LICENSE.md (lists the libraries that Bun links and their licenses)
+---------------------------------------------------------------------------
+
+{{BUN_LICENSE}}
+
+---------------------------------------------------------------------------
+GNU Library General Public License version 2
+(Source/JavaScriptCore/COPYING.LIB in https://github.com/oven-sh/WebKit)
+---------------------------------------------------------------------------
+
+{{JAVASCRIPTCORE_LICENSE}}
+
+===========================================================================
+IPADIC (mecab-ipadic), embedded in the jai-smell binary
+===========================================================================
+
+The dictionary is distributed with the kuromoji package. Its copyright
+notice and license are included in the kuromoji section below.
+
+===========================================================================
+p1ass/textlint-rule-preset-ai-words-ja
+https://github.com/p1ass/textlint-rule-preset-ai-words-ja
+
+Many entries in config/preset-rules.toml, and the way they are written,
+are based on the dictionary of this project.
+===========================================================================
+
+MIT License
+
+Copyright (c) 2026 p1ass
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+===========================================================================
+npm packages built into the jai-smell binary
+===========================================================================

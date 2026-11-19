@@ -1,6 +1,6 @@
-# jai-smell が提供するルールセット（プリセット）。~/.config/jai-smell/preset-rules.toml に配置する。
+# jai-smell が提供するルールセット（プリセット）。jai-smell のバイナリに含まれ、jai-smell preset で出力できる。
 #
-# jai-smell init を実行するたびに上書きされるため、このファイルは変更しない。
+# ルールセットを適用しない場合は、jai-smell.toml の preset.rule_sets に、ルールセットの名前と false を指定する。
 # ルールセットを追加する場合は、custom-rules.toml に記述する。ルールセットの形式は、custom-rules.toml を参照。
 #
 # 次の 4 つのルールセットを収録している。

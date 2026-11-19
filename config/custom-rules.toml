@@ -4,7 +4,8 @@
 # rule_sets: 検出する表現をまとめたルールセット。このファイルには rule_sets のみを記述できる。
 #   name: ルールセットの名前。設定ファイルのエラーメッセージに表示する。
 #   include、exclude: このルールセットを適用するファイルと、対象外とするファイルの glob。
-#     形式は jai-smell.toml の include、exclude と同じ。相対パスは、このファイルのディレクトリを基準とする。
+#     glob の形式は jai-smell.toml を参照。相対パスは、このファイルを rule_files に指定した設定ファイルと同じディレクトリを基準とする
+#     （ユーザー全体の設定から指定した場合は /）。
 #   entries: 検出する表現。tokens に指定した条件の並びと一致する、連続する形態素の並びを検出する。
 #     message: 検出した場合に出力するメッセージ。
 #     tokens: 形態素の条件の並び。条件に指定できるフィールドは surface_form, pos, pos_detail_1, pos_detail_2, pos_detail_3,
