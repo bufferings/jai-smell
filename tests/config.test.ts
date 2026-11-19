@@ -8,7 +8,13 @@ const HOME = "/home/me";
 const HOME_CONFIG = "/home/me/.config/jai-smell/jai-smell.toml";
 const PROJECT_CONFIG = "/repo/jai-smell.toml";
 const DOCS_CONFIG = "/repo/docs/jai-smell.toml";
-const PRESET = ["不自然な日本語化", "比喩", "話し言葉", "技術文書で一般的ではない用語"];
+const PRESET = [
+  "不自然な日本語化",
+  "比喩",
+  "話し言葉",
+  "技術文書で一般的ではない用語",
+  "漢字をひらく",
+];
 
 const ruleSet = (name: string, extra = "") =>
   `[[rule_sets]]\nname = "${name}"\n${extra}\n[[rule_sets.entries]]\nmessage = "${name}"\ntokens = [{ pos = "名詞" }]\n`;

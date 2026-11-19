@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CONFIG, REPOSITORY, RULE_FILES } from "./helpers.ts";
+import { CONFIG, REPOSITORY, RULE_FILES, run, Workspace } from "./helpers.ts";
 
 const read = (path: string) => readFileSync(join(REPOSITORY, path), "utf8");
 const readJson = (path: string) => JSON.parse(read(path));
@@ -41,9 +41,27 @@ test("出力スタイルは、Claude Code の組み込みの指示を保持し�
 });
 
 test("スキルの名前は、ディレクトリの名前と一致する", () => {
-  expect(frontMatter("plugin/skills/japanese-tech-writing/SKILL.md")).toContain(
-    "name: japanese-tech-writing",
+  for (const name of ["japanese-tech-writing", "add-custom-rule"]) {
+    expect(frontMatter(`plugin/skills/${name}/SKILL.md`)).toContain(`name: ${name}`);
+  }
+});
+
+test("add-custom-rule スキルの probe.toml は、形態素ごとに分割位置と品詞のみを出力する", () => {
+  const workspace = new Workspace("probe");
+  // プリセットが適用されていれば、「走る」も検出される
+  workspace.write("example.txt", "正典が走る。\n");
+  const output = run(
+    ["--config", join(REPOSITORY, "plugin/skills/add-custom-rule/probe.toml"), "example.txt"],
+    { cwd: workspace.root },
   );
+  expect(output.code).toBe(1);
+  expect(output.stdout.split("\n").filter((line) => line !== "")).toEqual([
+    "example.txt:1:1: 接頭詞",
+    "example.txt:1:2: 名詞",
+    "example.txt:1:3: 助詞",
+    "example.txt:1:4: 動詞",
+    "example.txt:1:6: 記号",
+  ]);
 });
 
 /** PATH に jai-smell を含めるかどうかを指定して、check.sh を実行する */
