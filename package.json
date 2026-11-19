@@ -1,6 +1,6 @@
 {
   "name": "jai-smell",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "AI が生成した文章に多用される日本語の表現を検出するツール",
   "license": "MIT",
   "repository": "https://github.com/bufferings/jai-smell",
