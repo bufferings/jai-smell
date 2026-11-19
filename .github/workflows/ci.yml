@@ -43,7 +43,8 @@ jobs:
       - name: Formula template check
         # packaging/homebrew/jai-smell.rb のプレースホルダーをダミーの値に置換して brew style を実行し、
         # テンプレートの誤りをリリース前に検出する。brew style は tap 内の formula のみを対象とするため、
-        # 一時的な tap を作成して配置する
+        # 一時的な tap を作成して配置する。--formula を指定すると引数が formula の名前として解釈されるため、
+        # ファイルのパスだけを指定する
         run: |
           tapdir="$(brew --repository)/Library/Taps/bufferings/homebrew-jai-smell-ci"
           mkdir -p "$tapdir/Formula"
@@ -53,4 +54,4 @@ jobs:
             -e "s/{{SHA256}}/$dummy_sha256/g" \
             packaging/homebrew/jai-smell.rb \
             > "$tapdir/Formula/jai-smell.rb"
-          brew style --formula "$tapdir/Formula/jai-smell.rb"
+          brew style "$tapdir/Formula/jai-smell.rb"
