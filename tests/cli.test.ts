@@ -442,3 +442,20 @@ test("フック: 除外のコメントは、編集後のファイル全体から
   output = workspace.hook(edit(file, "// ログを見る。\n"));
   expect(output.code).toBe(2);
 });
+
+test("--version と -V は、package.json のバージョンを出力する", () => {
+  const { version } = JSON.parse(readFileSync(join(REPOSITORY, "package.json"), "utf8"));
+  for (const option of ["--version", "-V"]) {
+    const output = run([option]);
+    expect(output.code).toBe(0);
+    expect(output.stdout).toBe(`${version}\n`);
+  }
+});
+
+test("--help と -h は、使い方を出力する", () => {
+  for (const option of ["--help", "-h"]) {
+    const output = run([option]);
+    expect(output.code).toBe(0);
+    expect(output.stdout).toContain("jai-smell --version");
+  }
+});

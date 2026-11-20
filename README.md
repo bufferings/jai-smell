@@ -185,6 +185,8 @@ jai-smell docs/*.md
 | `jai-smell config <file>` | 読み込んだ設定ファイルと、ファイルに適用する設定を出力します |
 | `jai-smell expressions` | jai-smell が提供する、表現のルールの内容を出力します |
 | `jai-smell setup` | Claude Code のプラグインをインストールします。インストール済みの場合は、アップデートします |
+| `jai-smell --version` | バージョンを出力します |
+| `jai-smell --help` | 使い方を出力します |
 
 ### チェック対象
 

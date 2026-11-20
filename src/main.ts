@@ -1,4 +1,6 @@
 #!/usr/bin/env bun
+// ビルド時に、バイナリに組み込まれる
+import packageJson from "../package.json" with { type: "json" };
 import {
   CONFIG_FAILED,
   ConfigError,
@@ -26,6 +28,10 @@ const USAGE = `使い方:
       jai-smell が提供する、表現のルールの内容を出力する
   jai-smell setup
       Claude Code のプラグインをインストールする。インストール済みの場合は、アップデートする
+  jai-smell --version、-V
+      バージョンを出力する
+  jai-smell --help、-h
+      この使い方を出力する
 
 設定ファイルがない場合は、表現のルールをすべてのファイルに適用する。
 表現のルールのうち、colloquial（話し言葉）と prefer-hiragana（漢字をひらく）は、設定ファイルの expressions.rules に
@@ -69,8 +75,8 @@ export type Args = {
   config: string | undefined;
 };
 
-/** --help が指定された場合は undefined を返す */
-export function parseArgs(argv: readonly string[]): Args | undefined {
+/** --help または --version が指定された場合は、その名前を返す */
+export function parseArgs(argv: readonly string[]): Args | "help" | "version" {
   const args = [...argv];
   const subcommand = SUBCOMMANDS.includes(args[0] ?? "") ? args.shift() : undefined;
   let config: string | undefined;
@@ -81,7 +87,9 @@ export function parseArgs(argv: readonly string[]): Args | undefined {
     if (optionsEnded) {
       files.push(arg);
     } else if (arg === "-h" || arg === "--help") {
-      return undefined;
+      return "help";
+    } else if (arg === "-V" || arg === "--version") {
+      return "version";
     } else if (arg === "--config") {
       config = args.shift();
       if (config === undefined) {
@@ -186,15 +194,19 @@ async function checkHookInput(config: string | undefined): Promise<number> {
 }
 
 async function main(): Promise<number> {
-  let args: Args | undefined;
+  let args: ReturnType<typeof parseArgs>;
   try {
     args = parseArgs(process.argv.slice(2));
   } catch (error) {
     console.error(`jai-smell: ${(error as Error).message}\n\n${USAGE}`);
     return 2;
   }
-  if (args === undefined) {
+  if (args === "help") {
     console.log(USAGE);
+    return 0;
+  }
+  if (args === "version") {
+    console.log(packageJson.version);
     return 0;
   }
   const { mode, config } = args;
