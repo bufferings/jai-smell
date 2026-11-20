@@ -1,5 +1,5 @@
 {
   "name": "jai-smell",
   "description": "Flags unnatural Japanese expressions in files written by Claude Code, using the jai-smell command. Also provides an output style for Japanese replies, and skills for writing Japanese technical text, adding custom detection rules, and creating the config file.",
-  "version": "0.5.0"
+  "version": "0.5.1"
 }
