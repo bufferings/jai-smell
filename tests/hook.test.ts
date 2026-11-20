@@ -58,7 +58,7 @@ test("Stop フックの指示で再出力した返答は、チェックしない
   expect(reply(stop("返答です。", { stop_hook_active: true }))).toBeUndefined();
 });
 
-test("英字の単語があり、日本語の文字がない本文を、日本語が含まれない返答と判定する", () => {
+test("本文の大部分が英語の返答を判定する", () => {
   expect(lacksJapanese("The build succeeded.")).toBe(true);
   expect(lacksJapanese("ビルドは成功しました。")).toBe(false);
   expect(lacksJapanese("Build は成功しました。")).toBe(false);
@@ -66,6 +66,18 @@ test("英字の単語があり、日本語の文字がない本文を、日本�
   expect(lacksJapanese("```sh\nbun run build\n```\n")).toBe(false);
   expect(lacksJapanese("`jai-smell`")).toBe(false);
   expect(lacksJapanese("42")).toBe(false);
+  // 英字の用語を多く含む日本語の文は、日本語の行として扱う
+  expect(
+    lacksJapanese("Homebrew の formula と GitHub Actions の workflow を update しました。"),
+  ).toBe(false);
+  // 日本語の単語を含む英語の文は、英語の行として扱う
+  expect(lacksJapanese("The build 成功 and all of the tests passed without errors.")).toBe(true);
+  // 英語の行の分量が、日本語の行の分量を超える場合に判定する
+  const english = "The build succeeded and all of the tests passed.";
+  expect(lacksJapanese(`完了です。\n\n${english}\n\n${english}\n`)).toBe(true);
+  expect(lacksJapanese(`ビルドは成功しました。英語の文案は次のとおりです。\n\n${english}\n`)).toBe(
+    false,
+  );
 });
 
 /** 返答のチェックの設定を指定して、Stop フックを実行する */
@@ -83,34 +95,26 @@ function stopHook(name: string, config: string | undefined, message: string) {
 
 test("返答のチェックは、設定で有効にした場合にのみ適用する", () => {
   expect(stopHook("stop-default", undefined, "The build succeeded.").code).toBe(0);
-  expect(stopHook("stop-default-check", undefined, "ログを見張ります。").code).toBe(0);
 });
 
-test("replies.japanese を有効にした場合は、日本語が含まれない返答を検出する", () => {
+test("replies.japanese を有効にした場合は、大部分が英語の返答を検出する", () => {
   const config = "[replies]\njapanese = true\n";
   const output = stopHook("stop-japanese", config, "The build succeeded.");
   expect(output.code).toBe(2);
   expect(output.stderr).toContain("日本語で再出力してください");
   expect(stopHook("stop-japanese-ok", config, "ビルドは成功しました。").code).toBe(0);
-  // 表現のチェックは replies.check で有効にする
-  expect(stopHook("stop-japanese-only", config, "ログを見張ります。").code).toBe(0);
 });
 
-test("replies.check を有効にした場合は、返答に表現のルールと textlint のルールを適用する", () => {
-  const output = stopHook(
-    "stop-check",
-    "[replies]\ncheck = true\n[textlint]\nenabled = true\n",
-    "ログを見張ります。\n\n確認することができます。\n",
-  );
-  expect(output.code).toBe(2);
-  expect(output.stderr).toContain("返答から、修正を検討すべき表現の候補を検出しました");
-  expect(output.stderr).toContain('返答:1:4: "見張る"');
-  expect(output.stderr).toContain("返答:3:3: ");
-  expect(output.stderr).toContain("（textlint: ja-no-redundant-expression）");
-  expect(stopHook("stop-check-ok", "[replies]\ncheck = true\n", "ログを監視します。").code).toBe(0);
-});
-
-test("replies に不明なキーと、真偽値ではない値を指定した場合はエラーにする", () => {
-  expect(stopHook("stop-unknown", "[replies]\nenglish = true\n", "返答です。").code).toBe(1);
-  expect(stopHook("stop-type", '[replies]\njapanese = "yes"\n', "返答です。").code).toBe(1);
+test("設定を読み込めない場合は、チェックを実行していないことを exit 2 で Claude に通知する", () => {
+  for (const [name, config, message] of [
+    ["stop-unknown", "[replies]\nenglish = true\n", "english"],
+    ["stop-type", '[replies]\njapanese = "yes"\n', "japanese には、true または false"],
+    ["stop-preset", "[preset]\nenabled = false\n", "preset は使用できません"],
+  ] as const) {
+    const output = stopHook(name, config, "返答です。");
+    expect(output.code).toBe(2);
+    expect(output.stderr).toContain("チェックを実行していません");
+    expect(output.stderr).toContain('claude "/jai-smell:configure"');
+    expect(output.stderr).toContain(message);
+  }
 });

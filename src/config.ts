@@ -27,6 +27,10 @@ const PROJECT_FILE = "jai-smell.toml";
 const HOME_FILE = ".config/jai-smell/jai-smell.toml";
 const HOME_REQUIRED = "~/ から始まるパスを指定するには、HOME の設定が必要です";
 
+/** preset を記述した設定ファイルに、修正の方法を示す。不明なフィールドのエラーでは、修正の方法を特定できないためである */
+const PRESET_RENAMED =
+  'preset は使用できません。claude "/jai-smell:configure" を実行すると、設定ファイルを修正できます';
+
 /** textlint のルールを有効にした場合の、適用するファイルのデフォルト。ルールは文章を対象としているためである */
 const TEXTLINT_INCLUDE = ["**/*.md", "**/*.txt"];
 /**
@@ -146,13 +150,11 @@ export class BuiltIn {
 
 /** Claude の返答のチェックの設定 */
 export type Replies = {
-  /** 日本語の文字を含まない返答を検出する */
+  /** 大部分が英語の返答を検出する */
   japanese: boolean;
-  /** 返答に、表現のルール、追加のルールセット、textlint のルールを適用する */
-  check: boolean;
 };
 
-const REPLIES_KEYS = ["japanese", "check"] as const;
+const REPLIES_KEYS = ["japanese"] as const;
 
 export class Config {
   private constructor(
@@ -262,7 +264,7 @@ export class Config {
     textlint.include = new Globs("include", resolveGlobs(TEXTLINT_INCLUDE, "/", home));
     Object.assign(textlint.items, TEXTLINT_RULES);
     // 返答のチェックは、検出のたびに返答の再出力を伴うため、設定で有効にした場合にのみ適用する
-    const replies: Replies = { japanese: false, check: false };
+    const replies: Replies = { japanese: false };
 
     for (const { path, file, base } of layers) {
       const context = (error: unknown) =>
@@ -270,6 +272,9 @@ export class Config {
       // 設定ファイルに記述したルールセットと、rule_files のファイルのルールセットを、読み込む順に並べる
       const sources: { path: string; sets: unknown[] }[] = [];
       try {
+        if (file.preset !== undefined) {
+          throw new Error(PRESET_RENAMED);
+        }
         rejectUnknownKeys(file, [
           "exclude",
           "rule_files",

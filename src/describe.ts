@@ -14,8 +14,7 @@ export function describe(config: Config, file: string): string {
     ...describeFile(config, file),
     "",
     "Claude の返答のチェック（replies）:",
-    `  japanese（日本語が含まれない返答の検出）: ${applies(config.replies.japanese)}`,
-    `  check（表現のルール、追加のルールセット、textlint のルールの適用）: ${applies(config.replies.check)}`,
+    `  japanese（大部分が英語の返答の検出）: ${applies(config.replies.japanese)}`,
   ].join("\n");
 }
 

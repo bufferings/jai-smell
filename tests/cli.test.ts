@@ -364,12 +364,18 @@ test("フック: コードは Markdown の場合にのみ対象外とする", ()
   ]);
 });
 
-test("フック: フック自体の失敗では、Claude の処理を中断しない", () => {
+test("フック: フックの入力を解析できない場合は、Claude の処理を中断しない", () => {
   expect(hook("not json").code).toBe(1);
+});
+
+test("フック: 設定を読み込めない場合は、チェックを実行していないことを Claude に通知する", () => {
   const workspace = new Workspace("hook-invalid");
   workspace.write("work/jai-smell.toml", "unknown = 1");
   const output = workspace.hook(edit(workspace.path("work/doc.md"), "CI が走る。"));
-  expect(output.code).toBe(1);
+  expect(output.code).toBe(2);
+  expect(output.stderr).toContain("チェックを実行していません");
+  expect(output.stderr).toContain("unknown");
+  expect(output.stderr).not.toContain("走る");
 });
 
 test("表現のルールは、修正前の文章のすべての行を検出する", () => {

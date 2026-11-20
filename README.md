@@ -66,10 +66,19 @@ textlint のルールは、次のプロジェクトのものを変更せずに�
 
 ```sh
 brew install bufferings/tap/jai-smell
-jai-smell init
+jai-smell setup
 ```
 
-`jai-smell init` は、Claude Code のプラグイン `jai-smell@jai-smell` をインストールします。`claude` コマンドが見つからない場合は、インストール手順を表示します。Homebrew の formula はインストール時にホームディレクトリへ書き込めないため、`brew install` の後に実行してください。起動中の Claude Code のセッションには、次回の起動時から反映されます。
+`jai-smell setup` は、Claude Code のプラグイン `jai-smell@jai-smell` をインストールします。`claude` コマンドが見つからない場合は、インストール手順を表示します。Homebrew の formula はインストール時にホームディレクトリへ書き込めないため、`brew install` の後に実行してください。起動中の Claude Code のセッションには、次回の起動時から反映されます。
+
+アップデートでも、`brew upgrade` の後に `jai-smell setup` を実行します。
+
+```sh
+brew upgrade jai-smell
+jai-smell setup
+```
+
+プラグインがインストール済みの場合、`jai-smell setup` はプラグインをアップデートします。プラグインは `brew upgrade` ではアップデートされないため、実行しない場合は、バイナリとプラグインのバージョンが異なる状態になります。設定ファイルを読み込めない場合は、スキル `configure` で修正できます。
 
 設定ファイルがない場合は、デフォルトの表現のルールをすべてのファイルに適用します。
 
@@ -91,12 +100,12 @@ cd jai-smell
 bun install --frozen-lockfile
 bun run build
 cp dist/jai-smell ~/.local/bin/
-jai-smell init
+jai-smell setup
 ```
 
 ### プラグインの手動インストール
 
-`jai-smell init` を使用しない場合は、次のコマンドでプラグインをインストールします。
+`jai-smell setup` を使用しない場合は、次のコマンドでプラグインをインストールします。
 
 ```sh
 claude plugin marketplace add bufferings/jai-smell
@@ -105,16 +114,16 @@ claude plugin install jai-smell@jai-smell
 
 プラグインは、Claude Code がファイルを編集した際（Write、Edit、MultiEdit）に、`jai-smell hook` を実行します。`jai-smell` が PATH に存在しない場合は、何も実行しません。プラグインに含まれる出力スタイルとスキルについては、[出力スタイルとスキルを使用する](#出力スタイルとスキルを使用する)を参照してください。
 
-### アップデート
+### プラグインの手動アップデート
+
+`jai-smell setup` を使用しない場合は、次のコマンドでプラグインをアップデートします。
 
 ```sh
-brew upgrade jai-smell
 claude plugin marketplace update jai-smell
 claude plugin update jai-smell@jai-smell
 ```
 
-- 表現のルールと textlint のルールはバイナリに含まれているため、`brew upgrade` で更新されます。検出結果は、ルールの追加や変更によって、アップグレードの前後で異なる場合があります。
-- プラグインは `brew upgrade` ではアップデートされないため、`claude plugin` コマンドでアップデートしてください。
+表現のルールと textlint のルールはバイナリに含まれているため、`brew upgrade` で更新されます。検出結果は、ルールの追加や変更によって、アップグレードの前後で異なる場合があります。
 
 ## 使い方
 
@@ -124,9 +133,11 @@ claude plugin update jai-smell@jai-smell
 
 - Claude Code がファイルを編集するたびに（PostToolUse フック）、その編集で追加・変更された部分のみをチェックします。編集前からファイルに存在していた文章は、チェックの対象外です。
 - 検出した場合は、終了コード 2 で終了し、検出結果を Claude にフィードバックします。
-- Claude の返答は、デフォルトではチェックしません。設定ファイルの [replies](#replies) で有効にすると、返答の終了時（Stop フック）にチェックします。返答の表現は、出力スタイル `japanese-replies` でも指示できます。
+- Claude の返答は、デフォルトではチェックしません。設定ファイルの [replies](#replies) で有効にすると、返答の終了時（Stop フック）に、大部分が英語の返答を検出します。返答の表現は、出力スタイル `japanese-replies` でも指示できます。
 
-設定ファイルの読み込みに失敗した場合など、jai-smell 自体の処理が失敗した場合は、終了コード 1 で終了します。この場合、Claude へのフィードバックは行わず、Claude の処理も中断しません。
+設定ファイルの読み込みに失敗した場合は、チェックを実行せずに終了コード 2 で終了し、エラーメッセージを Claude に通知します。Claude は、返答の中で利用者に報告します。設定ファイルは、スキル `configure` で修正できます。
+
+その他の理由で jai-smell 自体の処理が失敗した場合は、終了コード 1 で終了します。この場合、Claude へのフィードバックは行わず、Claude の処理も中断しません。
 
 ### 出力スタイルとスキルを使用する
 
@@ -173,7 +184,7 @@ jai-smell docs/*.md
 | --- | --- |
 | `jai-smell config <file>` | 読み込んだ設定ファイルと、ファイルに適用する設定を出力します |
 | `jai-smell expressions` | jai-smell が提供する、表現のルールの内容を出力します |
-| `jai-smell init` | Claude Code のプラグインをインストールします |
+| `jai-smell setup` | Claude Code のプラグインをインストールします。インストール済みの場合は、アップデートします |
 
 ### チェック対象
 
@@ -235,7 +246,7 @@ textlint のルールの検出結果は、ルールの名前で指定します�
 | --- | --- |
 | 表現のルール | すべてのファイルに適用します。`colloquial`（話し言葉）と `prefer-hiragana`（漢字をひらく）は、[expressions](#expressions) の `rules` に `true` を指定した場合に適用します |
 | textlint のルール | 適用しません。[textlint](#textlint) の `enabled` に `true` を指定した場合に適用します |
-| Claude の返答のチェック | 適用しません。[replies](#replies) の `japanese` または `check` に `true` を指定した場合に適用します |
+| Claude の返答のチェック | 適用しません。[replies](#replies) の `japanese` に `true` を指定した場合に適用します |
 
 デフォルトを変更する場合と、ルールセットを追加する場合に、設定ファイルを作成します。Claude Code では、スキル `configure` を使用すると、検出する内容の一覧から項目を選択して、設定ファイルを作成できます。
 
@@ -272,7 +283,6 @@ no-ai-list-formatting = true
 # Claude の返答のチェックの設定
 [replies]
 japanese = true
-check = true
 
 # この設定ファイルに直接記述するルールセット
 [[rule_sets]]
@@ -336,8 +346,7 @@ $ jai-smell config docs/blog/post.md
     オプション: sentence-length = {"max":150}
 
 Claude の返答のチェック（replies）:
-  japanese（日本語が含まれない返答の検出）: 適用しない
-  check（表現のルール、追加のルールセット、textlint のルールの適用）: 適用しない
+  japanese（大部分が英語の返答の検出）: 適用しない
 ```
 
 ### glob の形式
@@ -512,19 +521,16 @@ Claude Code が返答を終了した時点で（Stop フック）、返答の本
 
 ```toml
 [replies]
-# 日本語が含まれない返答を検出し、日本語での再出力を指示する
+# 大部分が英語の返答を検出し、日本語での再出力を指示する
 japanese = true
-# 返答に、表現のルール、追加のルールセット、textlint のルールを適用する
-check = true
 ```
 
 | キー | デフォルト | 内容 |
 | --- | --- | --- |
-| `japanese` | `false` | 本文に英字の単語があり、ひらがな、カタカナ、漢字がない返答を検出します。コードブロックとインラインコードは本文に含めないため、コードのみの返答は検出しません |
-| `check` | `false` | 返答を Markdown として解析し、表現のルール、追加のルールセット、textlint のルールを適用します |
+| `japanese` | `false` | 本文の大部分が英語の返答を検出します。日本語の文字（ひらがな、カタカナ、漢字）の割合が 1 割未満の行を英語の行として、英語の行の分量が、その他の行の分量を超える場合に検出します。分量の比較では、日本語の 1 文字を英字の 2 文字として数えます。コードブロックとインラインコードは本文に含めないため、コードのみの返答は検出しません |
 
-- 設定は、Claude Code の作業ディレクトリから探索した設定ファイルを使用します。`check` で適用するルールは、作業ディレクトリの Markdown のファイル（`reply.md`）に適用される設定と同じです。textlint のルールは、`textlint.enabled` が `true` の場合に適用します。
-- チェックは、返答が表示された後に実行します。検出した場合は、元の返答、検出結果、再出力した返答の順に表示されます。
+- 設定は、Claude Code の作業ディレクトリから探索した設定ファイルを使用します。
+- チェックは、返答が表示された後に実行します。検出した場合は、元の返答、再出力の指示、再出力した返答の順に表示されます。
 - 再出力した返答は、再度チェックしません。検出が続く場合に、返答の終了を妨げないためです。
 
 ## アンインストール

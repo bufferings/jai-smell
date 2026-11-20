@@ -1,14 +1,14 @@
 #!/usr/bin/env bun
 import {
+  CONFIG_FAILED,
+  ConfigError,
   checkFile,
-  checkReply,
   checkWritten,
   configFor,
   FILE_HEADING,
   formatFinding,
-  REPLY_HEADING,
-  REPLY_LABEL,
   REPLY_NOT_JAPANESE,
+  replyLacksJapanese,
 } from "./check.ts";
 import { reply, target } from "./hook.ts";
 
@@ -17,14 +17,15 @@ const USAGE = `使い方:
       ファイル全体をチェックし、検出結果を path:line:col: message の形式で出力する。検出した場合は exit 1
   jai-smell hook [--config <path>]
       Claude Code のフックの JSON を stdin から読み込む。検出した場合は結果を stderr に出力して exit 2
+      設定を読み込めない場合は、エラーメッセージを stderr に出力して exit 2
       PostToolUse フックでは、今回の編集で追加・変更された部分をチェックする。
       Stop フックでは、設定ファイルの replies で有効にした場合に、Claude の返答をチェックする
   jai-smell config [--config <path>] <file>
       ファイルに適用する設定（読み込んだ設定ファイルと、適用するルール）を出力する
   jai-smell expressions
       jai-smell が提供する、表現のルールの内容を出力する
-  jai-smell init
-      Claude Code のプラグインをインストールする
+  jai-smell setup
+      Claude Code のプラグインをインストールする。インストール済みの場合は、アップデートする
 
 設定ファイルがない場合は、表現のルールをすべてのファイルに適用する。
 表現のルールのうち、colloquial（話し言葉）と prefer-hiragana（漢字をひらく）は、設定ファイルの expressions.rules に
@@ -42,7 +43,7 @@ jai-smell.toml の順に統合し、チェック対象のファイルに近い�
   rule_sets、rule_files: 追加するルールセットと、ルールセットを記述したファイル
   expressions: 表現のルールの設定（enabled、include、exclude、rules）
   textlint: textlint のルールの設定（enabled、include、exclude、rules）
-  replies: Claude の返答のチェックの設定（japanese、check）。デフォルトでは適用しない
+  replies: Claude の返答のチェックの設定（japanese）。デフォルトでは適用しない
 
 .md は Markdown として解析し、コードブロック、インラインコード、HTML、リンクの URL はチェックの対象外とする。
 ソースコードは、コメントと文字列リテラルをチェックする。textlint のルールは、コメントにのみ適用する。
@@ -58,9 +59,9 @@ type Mode =
   | { kind: "hook" }
   | { kind: "config"; file: string }
   | { kind: "expressions" }
-  | { kind: "init" };
+  | { kind: "setup" };
 
-const SUBCOMMANDS = ["hook", "config", "expressions", "init"];
+const SUBCOMMANDS = ["hook", "config", "expressions", "setup"];
 
 export type Args = {
   mode: Mode;
@@ -116,7 +117,7 @@ export function parseArgs(argv: readonly string[]): Args | undefined {
   if (config !== undefined) {
     throw new Error(`${subcommand} には --config を指定できません`);
   }
-  return { mode: { kind: subcommand as "expressions" | "init" }, config };
+  return { mode: { kind: subcommand as "expressions" | "setup" }, config };
 }
 
 async function runFiles(config: string | undefined, files: string[]): Promise<number> {
@@ -143,23 +144,30 @@ async function runFiles(config: string | undefined, files: string[]): Promise<nu
   return failed ? 2 : found ? 1 : 0;
 }
 
-/** 検出した場合は、exit 2 と stderr で Claude にフィードバックする */
+/**
+ * 検出した場合は、exit 2 と stderr で Claude にフィードバックする。
+ * 設定を読み込めない場合も、同じ方法で Claude に通知する。exit 1 は Claude に通知されず、チェックを実行していないことを利用者が確認できないためである
+ */
 async function runHook(config: string | undefined): Promise<number> {
+  try {
+    return await checkHookInput(config);
+  } catch (error) {
+    if (!(error instanceof ConfigError)) {
+      throw error;
+    }
+    console.error(`${CONFIG_FAILED}\n${error.message}`);
+    return 2;
+  }
+}
+
+async function checkHookInput(config: string | undefined): Promise<number> {
   const input = await Bun.stdin.text();
   const replied = reply(input);
   if (replied !== undefined) {
-    const { notJapanese, findings } = await checkReply(config, replied);
-    if (notJapanese) {
-      console.error(REPLY_NOT_JAPANESE);
-      return 2;
-    }
-    if (findings.length === 0) {
+    if (!replyLacksJapanese(config, replied)) {
       return 0;
     }
-    console.error(REPLY_HEADING);
-    for (const finding of findings) {
-      console.error(formatFinding(REPLY_LABEL, finding));
-    }
+    console.error(REPLY_NOT_JAPANESE);
     return 2;
   }
   const written = target(input);
@@ -190,7 +198,7 @@ async function main(): Promise<number> {
     return 0;
   }
   const { mode, config } = args;
-  // exit 2 は Claude へのフィードバックとして扱われるため、フック自体の失敗は exit 1 とする
+  // exit 2 は Claude へのフィードバックとして扱われるため、設定の読み込みを除くフックの失敗は exit 1 とする
   const failure = mode.kind === "files" ? 2 : 1;
   try {
     switch (mode.kind) {
@@ -208,8 +216,8 @@ async function main(): Promise<number> {
         process.stdout.write(EXPRESSIONS_TEXT);
         return 0;
       }
-      case "init": {
-        const { run } = await import("./init.ts");
+      case "setup": {
+        const { run } = await import("./setup.ts");
         return run() ? 0 : 1;
       }
     }

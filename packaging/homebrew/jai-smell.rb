@@ -6,7 +6,7 @@
 #
 # 対応環境は arm64 の macOS のみ（その他の環境では、README に記載の手順でソースからビルドする）。
 # formula はインストール時にホームディレクトリへ書き込めないため、Claude Code のプラグインは
-# インストール後に利用者が jai-smell init を実行して導入する。
+# インストール後に利用者が jai-smell setup を実行して導入する。
 class JaiSmell < Formula
   desc "Flags unnatural Japanese expressions in text written by Claude Code"
   homepage "https://github.com/bufferings/jai-smell"
@@ -26,8 +26,9 @@ class JaiSmell < Formula
 
   def caveats
     <<~EOS
-      Run the following to install the Claude Code plugin:
-        jai-smell init
+      Run the following after each install and upgrade.
+      It installs or updates the Claude Code plugin:
+        jai-smell setup
     EOS
   end
 

@@ -11,16 +11,17 @@ import { covers, parse as parseSuppressions } from "./suppress.ts";
 export const FILE_HEADING =
   "修正を検討すべき表現の候補を検出しました。チェック対象は今回の編集で追加・変更された部分のみです（行番号はその部分の中での位置を示します）。各箇所を確認し、該当する場合のみ修正してください。";
 
+/** 設定を読み込めない場合に、フックが Claude に通知する内容。エラーメッセージを続けて出力する */
+export const CONFIG_FAILED =
+  'jai-smell の設定を読み込めないため、チェックを実行していません。作業は継続し、返答の中で、次のエラーメッセージと、claude "/jai-smell:configure" を実行すると設定ファイルを修正できることを、利用者に報告してください。';
+
+/** 設定を読み込めない場合のエラー。利用者が設定ファイルを修正するまで、チェックを実行できない */
+export class ConfigError extends Error {}
+
 export const REPLY_NOT_JAPANESE =
-  "返答に日本語が含まれていません。同じ内容を、日本語で再出力してください。";
+  "返答の大部分が日本語ではありません。同じ内容を、日本語で再出力してください。英語の文章の作成を依頼された場合など、英語が正しい箇所は、変更せずに出力してください。";
 
-export const REPLY_HEADING =
-  "返答から、修正を検討すべき表現の候補を検出しました（行番号は返答の中での位置を示します）。各箇所を確認し、該当する箇所を修正した返答の全文を、再出力してください。";
-
-/** 検出結果の出力で、ファイルのパスの位置に出力する名前 */
-export const REPLY_LABEL = "返答";
-
-/** 返答に設定を適用するための、ファイルの名前。返答は Markdown として扱う */
+/** 返答に適用する設定を探索するための、ファイルの名前 */
 const REPLY_FILE = "reply.md";
 
 /** 検出結果 */
@@ -39,7 +40,12 @@ export const formatFinding = (path: string, finding: Finding): string =>
 
 /** configPath を指定した場合は、設定ファイルを探索せず、そのファイルのみを組み込みのデフォルトと統合する */
 export function configFor(configPath: string | undefined, file: string): Config {
-  const config = configPath === undefined ? Config.forFile(file) : Config.load(configPath);
+  let config: Config;
+  try {
+    config = configPath === undefined ? Config.forFile(file) : Config.load(configPath);
+  } catch (error) {
+    throw new ConfigError((error as Error).message);
+  }
   for (const warning of config.warnings) {
     if (!warned.has(warning)) {
       warned.add(warning);
@@ -66,37 +72,49 @@ export async function checkFile(configPath: string | undefined, file: string): P
   return toFindings(text, hits);
 }
 
-/**
- * Claude の返答をチェックする。返答は、作業ディレクトリの Markdown のファイルとして扱い、そのファイルに適用する設定を使用する。
- * 日本語が含まれない返答は、全体を再出力するため、表現のチェックを行わない
- */
-export async function checkReply(
-  configPath: string | undefined,
-  { cwd, text }: Reply,
-): Promise<{ notJapanese: boolean; findings: Finding[] }> {
-  const file = join(cwd, REPLY_FILE);
-  const config = configFor(configPath, file);
-  if (config.replies.japanese && lacksJapanese(text)) {
-    return { notJapanese: true, findings: [] };
-  }
-  if (!config.replies.check) {
-    return { notJapanese: false, findings: [] };
-  }
-  return { notJapanese: false, findings: toFindings(text, await findHits(config, file, text)) };
+/** Claude の返答が、再出力の対象かどうかを返す。設定は、作業ディレクトリから探索する */
+export function replyLacksJapanese(configPath: string | undefined, { cwd, text }: Reply): boolean {
+  const config = configFor(configPath, join(cwd, REPLY_FILE));
+  return config.replies.japanese && lacksJapanese(text);
 }
 
+/** 日本語の行と判定する、日本語の文字の割合の下限。英語の文に日本語の単語が含まれる行を、英語の行として扱うための値である */
+const JAPANESE_LINE_RATIO = 0.1;
+/** 日本語の文字は、英字より少ない文字数で同じ量の内容を表すため、行の分量の比較では 2 文字として数える */
+const JAPANESE_WEIGHT = 2;
+
 /**
- * 本文に、英字の単語があり、ひらがな、カタカナ、漢字がない場合に true を返す。
+ * 本文の大部分が英語の場合に true を返す。
+ * 本文を行に分割し、日本語の文字（ひらがな、カタカナ、漢字）の割合が低い行を、英語の行とする。
+ * 英語の行の分量が、その他の行の分量を超える場合に、大部分が英語と判定する。
+ * 文字の割合を本文の全体で計算すると、英字の用語を多く含む日本語の文章を、英語と判定するためである。
  * コードブロックとインラインコードは本文に含めないため、コードのみの返答は対象外となる
  */
 export function lacksJapanese(text: string): boolean {
-  const prose = textRanges(text)
-    .map(({ start, end }) => text.slice(start, end))
-    .join("\n");
-  return (
-    /[A-Za-z]{2,}/.test(prose) &&
-    !/[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u.test(prose)
-  );
+  // 行の構成を維持するため、本文ではない部分は、改行だけを残す
+  const ranges = textRanges(text);
+  let prose = "";
+  let position = 0;
+  for (const { start, end } of ranges) {
+    prose += text.slice(position, start).replace(/[^\n]/g, "") + text.slice(start, end);
+    position = end;
+  }
+  prose += text.slice(position).replace(/[^\n]/g, "");
+  let english = 0;
+  let others = 0;
+  for (const line of prose.split("\n")) {
+    const japanese =
+      line.match(/[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/gu)?.length ?? 0;
+    const latin = line.match(/[A-Za-z]/g)?.length ?? 0;
+    const isEnglish =
+      /[A-Za-z]{2,}/.test(line) && japanese / (japanese + latin) < JAPANESE_LINE_RATIO;
+    if (isEnglish) {
+      english += latin;
+    } else {
+      others += japanese * JAPANESE_WEIGHT + latin;
+    }
+  }
+  return english > others;
 }
 
 /**

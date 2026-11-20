@@ -8,7 +8,7 @@ import { REPOSITORY, run, Workspace } from "./helpers.ts";
 const read = (path: string) => readFileSync(join(REPOSITORY, path), "utf8");
 const readJson = (path: string) => JSON.parse(read(path));
 
-test("マーケットプレイスのプラグインの名前は、init がインストールする名前と一致する", () => {
+test("マーケットプレイスのプラグインの名前は、setup がインストールする名前と一致する", () => {
   const marketplace = readJson(".claude-plugin/marketplace.json");
   const plugin = readJson("plugin/.claude-plugin/plugin.json");
   expect(marketplace.name).toBe("jai-smell");

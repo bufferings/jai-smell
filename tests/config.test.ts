@@ -180,6 +180,8 @@ test("textlint は、キーごと、およびルールの名前ごとに、後�
 test("不正な設定はエラーにする", () => {
   expect(() => single('include = ["docs/**"]')).toThrow("不明なフィールド");
   expect(() => single("inherit = false")).toThrow("不明なフィールド");
+  // preset には、修正の方法を示す
+  expect(() => single("[preset]\nenabled = false")).toThrow('claude "/jai-smell:configure"');
   expect(() => single('[[entries]]\nmessage = "m"\ntokens = [{ pos = "名詞" }]')).toThrow();
   expect(() =>
     single('[[rule_sets]]\n[[rule_sets.entries]]\nmessage = "m"\ntokens = [{ pos = "名詞" }]'),

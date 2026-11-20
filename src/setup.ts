@@ -1,11 +1,22 @@
-// `jai-smell init`: Claude Code のプラグインをインストールする。
+// `jai-smell setup`: Claude Code のプラグインをインストールする。インストール済みの場合は、アップデートする。
 //
-// Homebrew の formula はインストール時にホームディレクトリへ書き込めないため、利用者がインストール後に実行する。
+// Homebrew の formula はインストール時にホームディレクトリへ書き込めないため、利用者がインストールとアップグレードの後に実行する。
+// プラグインは brew upgrade ではアップデートされず、バイナリとプラグインのバージョンが異なる状態になるため、同じコマンドでアップデートする。
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { delimiter, join } from "node:path";
 
 const MARKETPLACE = "bufferings/jai-smell";
+const MARKETPLACE_NAME = "jai-smell";
 const PLUGIN = "jai-smell@jai-smell";
+
+const INSTALL = [
+  ["plugin", "marketplace", "add", MARKETPLACE],
+  ["plugin", "install", PLUGIN],
+];
+const UPDATE = [
+  ["plugin", "marketplace", "update", MARKETPLACE_NAME],
+  ["plugin", "update", PLUGIN],
+];
 
 /** 完了しなかった手順がある場合は false を返す */
 export function run(): boolean {
@@ -19,24 +30,21 @@ export function run(): boolean {
 function installPlugin(home: string): boolean {
   const claudeDir = process.env.CLAUDE_CONFIG_DIR || join(home, ".claude");
   const state = pluginState(join(claudeDir, "settings.json"));
-  if (state === true) {
-    console.log(`Claude Code のプラグイン ${PLUGIN} はすでにインストールされています。`);
-    return true;
-  }
   if (state === false) {
     console.log(`Claude Code のプラグイン ${PLUGIN} は無効に設定されているため、変更しません。`);
     return true;
   }
+  const [action, steps] = state === true ? ["アップデート", UPDATE] : ["インストール", INSTALL];
+  const manual = () =>
+    console.log(
+      `次のコマンドで${action}してください。\n${steps.map((args) => `  claude ${args.join(" ")}`).join("\n")}`,
+    );
   const claude = findClaude(home);
   if (claude === undefined) {
-    console.log("claude コマンドが見つからないため、プラグインをインストールしませんでした。");
-    printManualInstall();
+    console.log(`claude コマンドが見つからないため、プラグインを${action}しませんでした。`);
+    manual();
     return false;
   }
-  const steps = [
-    ["plugin", "marketplace", "add", MARKETPLACE],
-    ["plugin", "install", PLUGIN],
-  ];
   for (const args of steps) {
     console.log(`$ claude ${args.join(" ")}`);
     const result = Bun.spawnSync([claude, ...args], {
@@ -45,21 +53,15 @@ function installPlugin(home: string): boolean {
       stderr: "inherit",
     });
     if (result.exitCode !== 0) {
-      console.log("プラグインのインストールに失敗しました。");
-      printManualInstall();
+      console.log(`プラグインの${action}に失敗しました。`);
+      manual();
       return false;
     }
   }
   console.log(
-    "プラグインをインストールしました。起動中の Claude Code のセッションには、次回の起動時から反映されます。",
+    `プラグインを${action}しました。起動中の Claude Code のセッションには、次回の起動時から反映されます。`,
   );
   return true;
-}
-
-function printManualInstall(): void {
-  console.log(
-    `次のコマンドでインストールしてください。\n  claude plugin marketplace add ${MARKETPLACE}\n  claude plugin install ${PLUGIN}`,
-  );
 }
 
 /**
