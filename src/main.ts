@@ -1,24 +1,36 @@
 #!/usr/bin/env bun
-import { checkFile, checkWritten, configFor, FILE_HEADING, formatFinding } from "./check.ts";
-import { target } from "./hook.ts";
+import {
+  checkFile,
+  checkReply,
+  checkWritten,
+  configFor,
+  FILE_HEADING,
+  formatFinding,
+  REPLY_HEADING,
+  REPLY_LABEL,
+  REPLY_NOT_JAPANESE,
+} from "./check.ts";
+import { reply, target } from "./hook.ts";
 
 const USAGE = `使い方:
   jai-smell [--config <path>] <files...>
       ファイル全体をチェックし、検出結果を path:line:col: message の形式で出力する。検出した場合は exit 1
   jai-smell hook [--config <path>]
-      Claude Code の PostToolUse フックの JSON を stdin から読み込み、今回の編集で追加・変更された部分をチェックする。
-      検出した場合は結果を stderr に出力して exit 2
+      Claude Code のフックの JSON を stdin から読み込む。検出した場合は結果を stderr に出力して exit 2
+      PostToolUse フックでは、今回の編集で追加・変更された部分をチェックする。
+      Stop フックでは、設定ファイルの replies で有効にした場合に、Claude の返答をチェックする
   jai-smell config [--config <path>] <file>
       ファイルに適用する設定（読み込んだ設定ファイルと、適用するルール）を出力する
-  jai-smell preset
-      jai-smell が提供するルールセット（プリセット）の内容を出力する
+  jai-smell expressions
+      jai-smell が提供する、表現のルールの内容を出力する
   jai-smell init
-      ~/.config/jai-smell/ に設定ファイルのひな形を作成し、Claude Code のプラグインをインストールする。
-      設定ファイルは、存在しない場合のみ作成する
+      Claude Code のプラグインをインストールする
 
-設定ファイルがない場合は、プリセットをすべてのファイルに適用する。
-textlint のルール（textlint-rule-preset-ja-technical-writing）は、設定ファイルの textlint.enabled に true を
-指定した場合に適用する。適用するファイルのデフォルトは、.md と .txt である。
+設定ファイルがない場合は、表現のルールをすべてのファイルに適用する。
+表現のルールのうち、colloquial（話し言葉）と prefer-hiragana（漢字をひらく）は、設定ファイルの expressions.rules に
+true を指定した場合に適用する。
+textlint のルール（textlint-rule-preset-ja-technical-writing と @textlint-ja/textlint-rule-preset-ai-writing）は、
+設定ファイルの textlint.enabled に true を指定した場合に適用する。適用するファイルのデフォルトは、.md と .txt である。
 
 設定は、~/.config/jai-smell/jai-smell.toml（ユーザー全体の設定）、チェック対象のファイルの上位のディレクトリにある
 jai-smell.toml の順に統合し、チェック対象のファイルに近い設定ファイルの指定を優先する。
@@ -28,8 +40,9 @@ jai-smell.toml の順に統合し、チェック対象のファイルに近い�
 設定ファイルには、次の内容を記述する。
   exclude: チェックの対象外とするファイルの glob。すべての設定ファイルの指定を合わせて適用する
   rule_sets、rule_files: 追加するルールセットと、ルールセットを記述したファイル
-  preset: プリセットの設定（enabled、include、exclude、rule_sets）
+  expressions: 表現のルールの設定（enabled、include、exclude、rules）
   textlint: textlint のルールの設定（enabled、include、exclude、rules）
+  replies: Claude の返答のチェックの設定（japanese、check）。デフォルトでは適用しない
 
 .md は Markdown として解析し、コードブロック、インラインコード、HTML、リンクの URL はチェックの対象外とする。
 ソースコードは、コメントと文字列リテラルをチェックする。textlint のルールは、コメントにのみ適用する。
@@ -44,10 +57,10 @@ type Mode =
   | { kind: "files"; files: string[] }
   | { kind: "hook" }
   | { kind: "config"; file: string }
-  | { kind: "preset" }
+  | { kind: "expressions" }
   | { kind: "init" };
 
-const SUBCOMMANDS = ["hook", "config", "preset", "init"];
+const SUBCOMMANDS = ["hook", "config", "expressions", "init"];
 
 export type Args = {
   mode: Mode;
@@ -103,7 +116,7 @@ export function parseArgs(argv: readonly string[]): Args | undefined {
   if (config !== undefined) {
     throw new Error(`${subcommand} には --config を指定できません`);
   }
-  return { mode: { kind: subcommand as "preset" | "init" }, config };
+  return { mode: { kind: subcommand as "expressions" | "init" }, config };
 }
 
 async function runFiles(config: string | undefined, files: string[]): Promise<number> {
@@ -132,7 +145,24 @@ async function runFiles(config: string | undefined, files: string[]): Promise<nu
 
 /** 検出した場合は、exit 2 と stderr で Claude にフィードバックする */
 async function runHook(config: string | undefined): Promise<number> {
-  const written = target(await Bun.stdin.text());
+  const input = await Bun.stdin.text();
+  const replied = reply(input);
+  if (replied !== undefined) {
+    const { notJapanese, findings } = await checkReply(config, replied);
+    if (notJapanese) {
+      console.error(REPLY_NOT_JAPANESE);
+      return 2;
+    }
+    if (findings.length === 0) {
+      return 0;
+    }
+    console.error(REPLY_HEADING);
+    for (const finding of findings) {
+      console.error(formatFinding(REPLY_LABEL, finding));
+    }
+    return 2;
+  }
+  const written = target(input);
   if (written === undefined) {
     return 0;
   }
@@ -173,9 +203,9 @@ async function main(): Promise<number> {
         console.log(describe(configFor(config, mode.file), mode.file));
         return 0;
       }
-      case "preset": {
-        const { PRESET_TEXT } = await import("./preset.ts");
-        process.stdout.write(PRESET_TEXT);
+      case "expressions": {
+        const { EXPRESSIONS_TEXT } = await import("./expressions.ts");
+        process.stdout.write(EXPRESSIONS_TEXT);
         return 0;
       }
       case "init": {

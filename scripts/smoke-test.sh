@@ -16,7 +16,7 @@ work="$(mktemp -d)"
 mv "$root/node_modules" "$root/node_modules.smoke-test"
 trap 'mv "$root/node_modules.smoke-test" "$root/node_modules"; rm -rf "$work"' EXIT
 
-# プリセットと textlint のルールの両方を実行する。プリセットは、設定に記述しなくても適用される
+# 表現のルールと textlint のルールの両方を実行する。表現のルールは、設定に記述しなくても適用される
 printf '[textlint]\nenabled = true\n' > "$work/jai-smell.toml"
 printf 'これは、長い、文で、読点が、多い、文です。\n\nログを見張る。\n' > "$work/a.md"
 

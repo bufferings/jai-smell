@@ -1,14 +1,12 @@
-// jai-smell コマンドとフックの動作を、プリセットとリポジトリの config/ の設定で検証する。
+// jai-smell コマンドとフックの動作を、表現のルールで検証する。
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  CONFIG,
   edit,
   findings,
   hook,
   REPOSITORY,
-  RULE_FILES,
   RULES_ONLY,
   run,
   Workspace,
@@ -17,7 +15,7 @@ import {
 } from "./helpers.ts";
 
 const SAMPLE = join(REPOSITORY, "tests/sample.md");
-/** プリセットの検証用。1 行ごとに、修正前の文章（検出される）と修正後の文章（検出されない）を記述する */
+/** 表現のルールの検証用。1 行ごとに、修正前の文章（検出される）と修正後の文章（検出されない）を記述する */
 const REWRITE_BEFORE = join(REPOSITORY, "tests/rewrite_before.md");
 const REWRITE_AFTER = join(REPOSITORY, "tests/rewrite_after.md");
 
@@ -97,9 +95,9 @@ test("ユーザー全体の設定の exclude に一致するファイルは、�
   expect(workspace.run([sample]).stdout).toBe("");
 });
 
-test("プリセットを適用しない場合も、追加のルールセットは適用する", () => {
+test("表現のルールを適用しない場合も、追加のルールセットは適用する", () => {
   const workspace = new Workspace("preset-off").withHomeConfig();
-  workspace.write("work/jai-smell.toml", `${TEST_RULE_SET}\n[preset]\nenabled = false\n`);
+  workspace.write("work/jai-smell.toml", `${TEST_RULE_SET}\n[expressions]\nenabled = false\n`);
   const sample = workspace.write("work/sample.md", readFileSync(SAMPLE, "utf8"));
   const output = workspace.run([sample]);
   expect(findings(output.stdout)).toEqual(withPath(sample, ['7:14: "注意"']));
@@ -107,8 +105,11 @@ test("プリセットを適用しない場合も、追加のルールセット�
 
 test("下位のディレクトリの設定は、上位のディレクトリの設定と統合する", () => {
   const workspace = new Workspace("nested").withHomeConfig();
-  workspace.write("work/jai-smell.toml", `${TEST_RULE_SET}\n[preset]\ninclude = ["docs/**"]\n`);
-  workspace.write("work/docs/blog/jai-smell.toml", '[preset.rule_sets]\n"比喩" = false\n');
+  workspace.write(
+    "work/jai-smell.toml",
+    `${TEST_RULE_SET}\n[expressions]\ninclude = ["docs/**"]\n`,
+  );
+  workspace.write("work/docs/blog/jai-smell.toml", "[expressions.rules]\nmetaphor = false\n");
   const text = readFileSync(SAMPLE, "utf8");
   const doc = workspace.write("work/docs/sample.md", text);
   const blog = workspace.write("work/docs/blog/sample.md", text);
@@ -136,13 +137,13 @@ test("config は、読み込んだ設定ファイルと、ファイルに適用�
   const workspace = new Workspace("describe").withHomeConfig();
   const project = workspace.write(
     "work/jai-smell.toml",
-    `exclude = ["skip/**"]\n${TEST_RULE_SET}\n[preset.rule_sets]\n"比喩" = false\n[textlint]\nenabled = true\n[textlint.rules]\nmax-ten = false\n`,
+    `exclude = ["skip/**"]\n${TEST_RULE_SET}\n[expressions.rules]\nmetaphor = false\n[textlint]\nenabled = true\n[textlint.rules]\nmax-ten = false\n`,
   );
   let output = workspace.run(["config", workspace.path("work/doc.md")]);
   expect(output.code).toBe(0);
   expect(output.stdout).toContain(workspace.path("home/.config/jai-smell/jai-smell.toml"));
   expect(output.stdout).toContain(project);
-  expect(output.stdout).toContain("適用しないルールセット: 比喩");
+  expect(output.stdout).toContain("適用しないルール: metaphor（比喩）");
   expect(output.stdout).toContain("追加のルールセット: テスト");
   expect(output.stdout).toContain("適用しないルール: max-ten、no-mix-dearu-desumasu");
   output = workspace.run(["config", workspace.path("work/a.rs")]);
@@ -151,21 +152,23 @@ test("config は、読み込んだ設定ファイルと、ファイルに適用�
   expect(output.stdout).toContain("exclude に一致するため、チェックしません。");
 });
 
-test("preset は、プリセットの内容を、rule_files に指定できる形式で出力する", () => {
-  const workspace = new Workspace("preset");
-  const output = workspace.run(["preset"]);
+test("expressions は、表現のルールの内容を、rule_files に指定できる形式で出力する", () => {
+  const workspace = new Workspace("expressions");
+  const output = workspace.run(["expressions"]);
   expect(output.code).toBe(0);
-  expect(output.stdout).toBe(readFileSync(join(REPOSITORY, "config/preset-rules.toml"), "utf8"));
-  // プリセットと同じ内容を rule_files で読み込んだ場合も、同じ検出結果を重複して出力しない
+  expect(output.stdout).toBe(
+    readFileSync(join(REPOSITORY, "config/expression-rules.toml"), "utf8"),
+  );
+  // 表現のルールと同じ内容を rule_files で読み込んだ場合も、同じ検出結果を重複して出力しない
   workspace.write("work/preset.toml", output.stdout);
   workspace.write("work/jai-smell.toml", 'rule_files = ["preset.toml"]');
   const sample = workspace.write("work/sample.md", readFileSync(SAMPLE, "utf8"));
   expect(findings(workspace.run([sample]).stdout)).toEqual(withPath(sample, SAMPLE_FINDINGS));
 });
 
-test("preset.rule_sets の不明な名前は、警告を出力してチェックを継続する", () => {
+test("expressions.rules の不明な名前は、警告を出力してチェックを継続する", () => {
   const workspace = new Workspace("warning");
-  workspace.write("work/jai-smell.toml", '[preset.rule_sets]\n"存在しない" = false\n');
+  workspace.write("work/jai-smell.toml", '[expressions.rules]\n"存在しない" = false\n');
   const sample = workspace.write("work/sample.md", readFileSync(SAMPLE, "utf8"));
   const output = workspace.run([sample]);
   expect(output.code).toBe(1);
@@ -189,8 +192,20 @@ test("読み込めないファイルがある場合は、残りのファイル�
   expect(findings(output.stdout)).toEqual(withPath("tests/sample.md", SAMPLE_FINDINGS));
 });
 
+/** 検出される表現を記述した、設定ファイルと rule_files のファイルを配置する */
+function configFiles(name: string): { workspace: Workspace; config: string; rules: string } {
+  const workspace = new Workspace(name);
+  const config = workspace.write(
+    "work/jai-smell.toml",
+    '# "効く" は検出される表現\nrule_files = ["rules.toml"]\n',
+  );
+  const rules = workspace.write("work/rules.toml", `# "効く" は検出される表現\n${TEST_RULE_SET}`);
+  return { workspace, config, rules };
+}
+
 test("設定ファイルと rule_files のファイル自体は、チェックの対象外とする", () => {
-  const output = run(["--config", CONFIG, CONFIG, ...RULE_FILES]);
+  const { workspace, config, rules } = configFiles("config-files");
+  const output = workspace.run(["--config", config, config, rules]);
   expect(output.code).toBe(0);
   expect(output.stdout).toBe("");
 });
@@ -321,8 +336,9 @@ test("フック: 日本語を含まないコードは検出しない", () => {
 });
 
 test("フック: 設定ファイルと rule_files のファイル自体は、チェックの対象外とする", () => {
-  for (const file of [CONFIG, ...RULE_FILES]) {
-    const output = hook(edit(file, '"効く" は'), CONFIG);
+  const { config, rules } = configFiles("hook-config-files");
+  for (const file of [config, rules]) {
+    const output = hook(edit(file, '"効く" は'), config);
     expect(output.code).toBe(0);
     expect(output.stderr).toBe("");
   }
@@ -356,7 +372,7 @@ test("フック: フック自体の失敗では、Claude の処理を中断し�
   expect(output.code).toBe(1);
 });
 
-test("プリセットは、修正前の文章のすべての行を検出する", () => {
+test("表現のルールは、修正前の文章のすべての行を検出する", () => {
   const output = run(["--config", RULES_ONLY, REWRITE_BEFORE]);
   const detected = new Set(
     output.stdout.split("\n").map((line) => Number(line.split(".md:")[1]?.split(":")[0])),
@@ -370,7 +386,7 @@ test("プリセットは、修正前の文章のすべての行を検出する",
     });
 });
 
-test("プリセットは、修正後の文章を検出しない", () => {
+test("表現のルールは、修正後の文章を検出しない", () => {
   const output = run(["--config", RULES_ONLY, REWRITE_AFTER]);
   expect(output.stdout).toBe("");
   expect(output.code).toBe(0);

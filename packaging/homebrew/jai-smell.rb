@@ -5,7 +5,7 @@
 # ci.yml ではダミーの値に置換して brew style を実行する。
 #
 # 対応環境は arm64 の macOS のみ（その他の環境では、README に記載の手順でソースからビルドする）。
-# formula はインストール時にホームディレクトリへ書き込めないため、設定ファイルとプラグインは
+# formula はインストール時にホームディレクトリへ書き込めないため、Claude Code のプラグインは
 # インストール後に利用者が jai-smell init を実行して導入する。
 class JaiSmell < Formula
   desc "Flags unnatural Japanese expressions in text written by Claude Code"
@@ -21,14 +21,12 @@ class JaiSmell < Formula
 
   def install
     bin.install "jai-smell"
-    pkgshare.install "jai-smell.toml", "preset-rules.toml", "custom-rules.toml"
     prefix.install "THIRD-PARTY-NOTICES.txt"
   end
 
   def caveats
     <<~EOS
-      Run the following to create the config files in ~/.config/jai-smell
-      and install the Claude Code plugin:
+      Run the following to install the Claude Code plugin:
         jai-smell init
     EOS
   end

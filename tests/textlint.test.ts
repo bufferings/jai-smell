@@ -15,10 +15,107 @@ const CODE_FINDINGS = ["1:17: max-ten", "3:14: no-double-negative-ja"];
 /** textlint のルールを有効にする設定 */
 const ENABLED = "[textlint]\nenabled = true\n";
 
-test("使用できるルールは、プリセットの 23 件である", () => {
-  expect(RULE_NAMES.length).toBe(23);
+test("使用できるルールは、2 つのプリセットの 28 件である", () => {
+  expect(RULE_NAMES.length).toBe(28);
   expect(RULE_NAMES).toContain("max-ten");
   expect(RULE_NAMES).toContain("no-doubled-joshi");
+  expect(RULE_NAMES).toContain("no-ai-list-formatting");
+  expect(RULE_NAMES).toContain("ai-tech-writing-guideline");
+});
+
+/** AI が生成した文章に多い記述のルールを、すべて有効にする設定 */
+const AI_WRITING = `${ENABLED}[textlint.rules]\n${[
+  "no-ai-list-formatting",
+  "no-ai-hype-expressions",
+  "no-ai-emphasis-patterns",
+  "ai-tech-writing-guideline",
+  "no-ai-colon-continuation",
+]
+  .map((name) => `${name} = true\n`)
+  .join("")}`;
+
+test("AI が生成した文章に多い記述のルールは、設定で有効にした場合にのみ適用する", () => {
+  const workspace = new Workspace("textlint-ai-writing");
+  workspace.write("work/jai-smell.toml", ENABLED);
+  const doc = workspace.write(
+    "work/doc.md",
+    [
+      "- **重要**: 革命的な技術です。",
+      "",
+      "次のコマンドを実行します:",
+      "",
+      "```sh",
+      "ls",
+      "```",
+      "",
+      "## **太字**の見出し",
+      "",
+      "変更する必要があります。",
+      "",
+    ].join("\n"),
+  );
+  // 文末のコロンは、ja-no-mixed-period が検出する
+  expect(textlintFindings(workspace.run([doc]).stdout)).toEqual(
+    withPath(doc, ["3:13: ja-no-mixed-period"]),
+  );
+  workspace.write("work/jai-smell.toml", AI_WRITING);
+  expect(textlintFindings(workspace.run([doc]).stdout)).toEqual(
+    withPath(doc, [
+      // 太字の接頭辞は no-ai-emphasis-patterns も検出するため、no-ai-list-formatting の検出結果のみを出力する
+      "1:1: no-ai-list-formatting",
+      "1:11: no-ai-hype-expressions",
+      // 文末のコロンは ja-no-mixed-period も検出するため、no-ai-colon-continuation の検出結果のみを出力する
+      "3:13: no-ai-colon-continuation",
+      "9:4: no-ai-emphasis-patterns",
+      "11:3: ai-tech-writing-guideline",
+    ]),
+  );
+});
+
+test("同じ箇所を 2 つのルールが検出する場合は、片方の検出結果のみを出力する", () => {
+  const workspace = new Workspace("textlint-duplicates");
+  workspace.write("work/jai-smell.toml", AI_WRITING);
+  const doc = workspace.write("work/doc.md", "設定することができます。\n");
+  expect(textlintFindings(workspace.run([doc]).stdout)).toEqual(
+    withPath(doc, ["1:3: ja-no-redundant-expression"]),
+  );
+  // 片方を無効にした場合は、もう片方の検出結果を出力する
+  workspace.write("work/jai-smell.toml", `${AI_WRITING}ja-no-redundant-expression = false\n`);
+  expect(textlintFindings(workspace.run([doc]).stdout)).toEqual(
+    withPath(doc, ["1:3: ai-tech-writing-guideline"]),
+  );
+});
+
+test("絵文字の後でルールの報告する位置がずれる場合も、同じ箇所の検出結果を重複して出力しない", () => {
+  const workspace = new Workspace("textlint-duplicates-emoji");
+  workspace.write("work/jai-smell.toml", AI_WRITING);
+  const doc = workspace.write(
+    "work/doc.md",
+    "- 🚀 **並列実行**: 時間を大幅に短縮することができます。\n",
+  );
+  expect(textlintFindings(workspace.run([doc]).stdout)).toEqual(
+    withPath(doc, [
+      "1:3: no-ai-list-formatting",
+      "1:18: no-ai-hype-expressions",
+      "1:22: ja-no-redundant-expression",
+    ]),
+  );
+});
+
+test("文体の混在は、no-mix-dearu-desumasu を有効にした場合にのみ検出する", () => {
+  const workspace = new Workspace("textlint-style-guideline");
+  workspace.write("work/jai-smell.toml", AI_WRITING);
+  const doc = workspace.write("work/doc.md", "これは文です。あれは文である。\n");
+  expect(workspace.run([doc]).stdout).toBe("");
+});
+
+test("「大幅に改善」は、no-ai-hype-expressions の検出結果のみを出力する", () => {
+  const workspace = new Workspace("textlint-hype-duplicate");
+  workspace.write("work/jai-smell.toml", AI_WRITING);
+  const doc = workspace.write("work/doc.md", "性能を大幅に改善します。\n");
+  expect(textlintFindings(workspace.run([doc]).stdout)).toEqual(
+    withPath(doc, ["1:4: no-ai-hype-expressions"]),
+  );
 });
 
 test("rules の設定を、プリセットのデフォルトの設定に上書きする", () => {
@@ -28,10 +125,19 @@ test("rules の設定を、プリセットのデフォルトの設定に上書�
   expect(rules["no-doubled-joshi"]).toBeDefined();
   expect(Object.keys(rules).sort()).toEqual([...RULE_NAMES].sort());
   // true を指定したルールは、ルールのデフォルトのオプションで適用する
-  expect(resolveRules({ "no-mix-dearu-desumasu": true })["no-mix-dearu-desumasu"]).not.toBe(true);
+  expect(resolveRules({ "no-mix-dearu-desumasu": true })["no-mix-dearu-desumasu"]).toEqual({
+    preferInHeader: "",
+    preferInBody: "",
+    preferInList: "",
+  });
   expect(resolveRules({ "no-mix-dearu-desumasu": false })["no-mix-dearu-desumasu"]).toBe(false);
   expect(resolveRules({ "no-mix-dearu-desumasu": { preferInList: "ですます" } })).toMatchObject({
     "no-mix-dearu-desumasu": { preferInList: "ですます" },
+  });
+  // 文書全体の件数の集計と、文体の混在を含む分類は、ルールのデフォルトのオプションでは適用しない
+  expect(resolveRules({ "ai-tech-writing-guideline": true })["ai-tech-writing-guideline"]).toEqual({
+    enableDocumentAnalysis: false,
+    disableConsistencyGuidance: true,
   });
   expect(() => resolveRules({ "no-such-rule": false })).toThrow("使用できるルールではありません");
   expect(() => resolveRules({ "max-ten": 3 })).toThrow("max-ten");
@@ -102,15 +208,28 @@ test("ソースコードでは、コメントにのみルールを適用する",
 test("文体の統一のルールは、設定で有効にした場合にのみ適用する", () => {
   const workspace = new Workspace("textlint-style");
   workspace.write("work/jai-smell.toml", ENABLED);
-  const doc = workspace.write("work/doc.md", "本文です。\n\n- 項目です。\n");
+  const doc = workspace.write(
+    "work/doc.md",
+    "本文です。\n\n- 項目です。\n- 項目です。\n- 項目である。\n",
+  );
   expect(workspace.run([doc]).stdout).toBe("");
   workspace.write(
     "work/jai-smell.toml",
     `${ENABLED}[textlint.rules]\nno-mix-dearu-desumasu = true\n`,
   );
   expect(textlintFindings(workspace.run([doc]).stdout)).toEqual(
-    withPath(doc, ["3:5: no-mix-dearu-desumasu"]),
+    withPath(doc, ["5:5: no-mix-dearu-desumasu"]),
   );
+});
+
+test("文体の統一のルールは、箇条書きの文体が本文と同じ文書を検出しない", () => {
+  const workspace = new Workspace("textlint-style-unified");
+  workspace.write(
+    "work/jai-smell.toml",
+    `${ENABLED}[textlint.rules]\nno-mix-dearu-desumasu = true\n`,
+  );
+  const doc = workspace.write("work/doc.md", "本文です。\n\n- 項目です。\n- 項目です。\n");
+  expect(workspace.run([doc]).stdout).toBe("");
 });
 
 test("rules で、ルールの無効化とオプションの指定ができる", () => {

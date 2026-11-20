@@ -13,6 +13,7 @@
     "notices": "bun scripts/third-party-notices.ts"
   },
   "dependencies": {
+    "@textlint-ja/textlint-rule-preset-ai-writing": "^1.7.0",
     "@textlint/ast-node-types": "^16.1.1",
     "@textlint/kernel": "^16.1.1",
     "@textlint/markdown-to-ast": "^16.1.1",

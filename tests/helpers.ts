@@ -1,13 +1,9 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 export const REPOSITORY = join(import.meta.dir, "..");
-/** jai-smell init が作成する設定ファイル */
-export const CONFIG = join(REPOSITORY, "config/jai-smell.toml");
-/** CONFIG の rule_files に指定したファイル */
-export const RULE_FILES = [join(REPOSITORY, "config/custom-rules.toml")];
-/** プリセットと config/custom-rules.toml のルールセットのみを適用し、textlint のルールは適用しない設定ファイル */
+/** 表現のルールのすべてを適用し、textlint のルールは適用しない設定ファイル */
 export const RULES_ONLY = join(REPOSITORY, "tests/rules-only.toml");
 
 export type Output = { code: number; stdout: string; stderr: string };
@@ -69,12 +65,13 @@ export class Workspace {
     return full;
   }
 
-  /** ユーザー全体の設定として、jai-smell init が作成するファイルを配置する */
+  /** ユーザー全体の設定として、表現のルールのすべてを適用し、ルールセットのファイルを読み込む設定ファイルを配置する */
   withHomeConfig(): this {
-    for (const source of [CONFIG, ...RULE_FILES]) {
-      const name = source.slice(source.lastIndexOf("/") + 1);
-      this.write(`home/.config/jai-smell/${name}`, readFileSync(source, "utf8"));
-    }
+    this.write(
+      "home/.config/jai-smell/jai-smell.toml",
+      'rule_files = ["custom-rules.toml"]\n[expressions.rules]\ncolloquial = true\nprefer-hiragana = true\n',
+    );
+    this.write("home/.config/jai-smell/custom-rules.toml", "");
     return this;
   }
 

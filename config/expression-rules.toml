@@ -1,14 +1,17 @@
-# jai-smell が提供するルールセット（プリセット）。jai-smell のバイナリに含まれ、jai-smell preset で出力できる。
+# jai-smell が提供する、表現のルール。jai-smell のバイナリに含まれ、jai-smell expressions で出力できる。
 #
-# ルールセットを適用しない場合は、jai-smell.toml の preset.rule_sets に、ルールセットの名前と false を指定する。
-# ルールセットを追加する場合は、custom-rules.toml に記述する。ルールセットの形式は、custom-rules.toml を参照。
+# ルールは、検出する表現をまとめたルールセットである。id は、設定ファイルの expressions.rules で指定する名前である。
+# colloquial と prefer-hiragana は、文書を硬い文体と表記に統一するためのルールで、デフォルトでは適用しない。
+# 適用する場合は、jai-smell.toml の expressions.rules に、id と true を指定する。
+# その他のルールを適用しない場合は、id と false を指定する。
+# ルールセットを追加する場合は、jai-smell.toml の rule_sets、または rule_files に指定したファイルに記述する。
 #
-# 次の 5 つのルールセットを収録している。
-#   不自然な日本語化: 英語の表現を日本語に置き換えた不自然な表現
-#   比喩: 物事を別のものにたとえた表現
-#   話し言葉: 文書では用いない話し言葉
-#   技術文書で一般的ではない用語: 他の分野で用いる用語で、技術文書では一般的ではない表現
-#   漢字をひらく: 漢字ではなく、ひらがなで記述する表記
+# 次の 5 つを収録している。
+#   translationese（不自然な日本語化）: 英語の表現を日本語に置き換えた不自然な表現
+#   metaphor（比喩）: 物事を別のものにたとえた表現
+#   colloquial（話し言葉）: 文書では用いない話し言葉
+#   unusual-terms（技術文書で一般的ではない用語）: 他の分野で用いる用語で、技術文書では一般的ではない表現
+#   prefer-hiragana（漢字をひらく）: 漢字ではなく、ひらがなで記述する表記
 #
 # 参考にした情報源:
 #   p1ass/textlint-rule-preset-ai-words-ja（MIT License, Copyright (c) 2026 p1ass）
@@ -19,6 +22,7 @@
 #     p1ass/textlint-rule-preset-ai-words-ja の辞書の元になった分析。
 
 [[rule_sets]]
+id = "translationese"
 name = "不自然な日本語化"
 
 [[rule_sets.entries]]
@@ -243,6 +247,7 @@ message = "\"引き換え\" は、英語の表現を日本語に置き換えた�
 tokens = [{ pos = "名詞", basic_form = "引き換え" }]
 
 [[rule_sets]]
+id = "metaphor"
 name = "比喩"
 
 [[rule_sets.entries]]
@@ -408,6 +413,7 @@ message = "\"畳む\" は、物事を別のものにたとえた比喩的な表�
 tokens = [{ pos = "動詞", pos_detail_1 = "自立", basic_form = "畳む" }]
 
 [[rule_sets]]
+id = "colloquial"
 name = "話し言葉"
 
 [[rule_sets.entries]]
@@ -646,6 +652,7 @@ message = "\"見方\" は、文書では用いない話し言葉です。文脈�
 tokens = [{ pos = "名詞", surface_form = "見方" }]
 
 [[rule_sets]]
+id = "unusual-terms"
 name = "技術文書で一般的ではない用語"
 
 [[rule_sets.entries]]
@@ -658,6 +665,7 @@ tokens = [
 ]
 
 [[rule_sets]]
+id = "prefer-hiragana"
 name = "漢字をひらく"
 
 [[rule_sets.entries]]

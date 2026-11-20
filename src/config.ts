@@ -1,7 +1,7 @@
 // 設定ファイルの読み込み。
 //
 // 設定は、次の順に統合する。後の層の指定を優先する。
-//   1. 組み込みのデフォルト: プリセットをすべてのファイルに適用する。textlint のルールは適用しない
+//   1. 組み込みのデフォルト: 表現のルールをすべてのファイルに適用する。textlint のルールは適用しない
 //      （textlint.enabled に true を指定した場合は、.md と .txt に適用する）
 //   2. ユーザー全体の設定: ~/.config/jai-smell/jai-smell.toml
 //   3. チェック対象のファイルの上位のディレクトリにある jai-smell.toml。上位のディレクトリから順に統合する
@@ -13,14 +13,15 @@
 // 設定の統合の方法は、次の 3 種類である。
 //   - exclude: すべての層の指定を合わせて、すべてのチェックに適用する
 //   - rule_sets と rule_files: すべての層のルールセットを追加する
-//   - preset と textlint: キーごと、およびルールセットとルールの名前ごとに、後の層の値を使用する
+//   - expressions と textlint: キーごと、およびルールの名前ごとに、後の層の値を使用する
+//   - replies: キーごとに、後の層の値を使用する
 //
 // 相対パスの glob は、ユーザー全体の設定では / を、その他の設定ではその設定ファイルのディレクトリを基準とする。
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve as resolvePath } from "node:path";
 import { type Entry, parseEntries, rejectUnknownKeys } from "./dictionary.ts";
+import { expressionRules } from "./expressions.ts";
 import { escapeGlob, globToRegExp } from "./glob.ts";
-import { presetRuleSets } from "./preset.ts";
 
 const PROJECT_FILE = "jai-smell.toml";
 const HOME_FILE = ".config/jai-smell/jai-smell.toml";
@@ -29,10 +30,28 @@ const HOME_REQUIRED = "~/ から始まるパスを指定するには、HOME の�
 /** textlint のルールを有効にした場合の、適用するファイルのデフォルト。ルールは文章を対象としているためである */
 const TEXTLINT_INCLUDE = ["**/*.md", "**/*.txt"];
 /**
- * プリセットのデフォルトでは有効で、jai-smell のデフォルトでは無効にする textlint のルール。
- * no-mix-dearu-desumasu: 統一する文体は文書によって異なるため、設定で有効にした場合にのみ適用する
+ * 表現のルールのうち、設定で有効にした場合にのみ適用するもの。
+ * 文体の方針（硬い文体への統一、表記の統一）を適用するルールで、適用するかどうかは文書によって異なるためである。
+ * その他のルールは、AI が生成した文章に多い表現を対象としており、デフォルトで適用する
  */
-const TEXTLINT_RULES: Record<string, unknown> = { "no-mix-dearu-desumasu": false };
+const EXPRESSION_RULES: Record<string, unknown> = { colloquial: false, "prefer-hiragana": false };
+
+/**
+ * textlint のプリセットのデフォルトでは有効で、jai-smell のデフォルトでは無効にする textlint のルール。設定で有効にした場合にのみ適用する。
+ *
+ * no-mix-dearu-desumasu は、引用や例文で文体が異なる文書でも検出するためである。
+ *
+ * AI が生成した文章に多い記述のルール（5 件）は、人間が記述した技術文書でも一般的な記述を多く検出するためである。
+ * コードブロックの前のコロン、「- **項目**: 説明」の形式のリスト、義務を示す表現などが該当する。
+ */
+const TEXTLINT_RULES: Record<string, unknown> = {
+  "no-mix-dearu-desumasu": false,
+  "no-ai-list-formatting": false,
+  "no-ai-hype-expressions": false,
+  "no-ai-emphasis-patterns": false,
+  "ai-tech-writing-guideline": false,
+  "no-ai-colon-continuation": false,
+};
 
 /** ユーザー全体の設定ファイルのパス */
 export function homeFile(home: string): string {
@@ -111,7 +130,7 @@ export class RuleSet {
   }
 }
 
-/** 組み込みのルール（プリセット、textlint）の設定 */
+/** 組み込みのルール（表現のルール、textlint のルール）の設定 */
 export class BuiltIn {
   constructor(
     readonly enabled: boolean,
@@ -125,6 +144,16 @@ export class BuiltIn {
   }
 }
 
+/** Claude の返答のチェックの設定 */
+export type Replies = {
+  /** 日本語の文字を含まない返答を検出する */
+  japanese: boolean;
+  /** 返答に、表現のルール、追加のルールセット、textlint のルールを適用する */
+  check: boolean;
+};
+
+const REPLIES_KEYS = ["japanese", "check"] as const;
+
 export class Config {
   private constructor(
     /** 読み込んだ設定ファイルと rule_files のファイルの絶対パス。読み込んだ順 */
@@ -133,10 +162,11 @@ export class Config {
     private readonly exclude: Globs,
     /** 利用者が追加したルールセット */
     readonly ruleSets: RuleSet[],
-    /** プリセットの設定。items は、ルールセットの名前ごとの true または false */
-    readonly preset: BuiltIn,
+    /** 表現のルールの設定。items は、ルールの id ごとの true または false */
+    readonly expressions: BuiltIn,
     /** textlint の設定。items は、ルールの名前ごとの true、false、またはオプション */
     readonly textlint: BuiltIn,
+    readonly replies: Replies,
     /** 設定の誤りのうち、チェックを継続できるもの */
     readonly warnings: string[],
   ) {}
@@ -151,22 +181,22 @@ export class Config {
     return this.excludes(file) ? [] : this.ruleSets.filter((ruleSet) => ruleSet.appliesTo(file));
   }
 
-  /** ファイルに適用する、プリセットのルールセットの名前 */
-  presetRuleSetsFor(file: string): string[] {
-    if (this.excludes(file) || !this.preset.appliesTo(file)) {
+  /** ファイルに適用する、表現のルールの id */
+  expressionRulesFor(file: string): string[] {
+    if (this.excludes(file) || !this.expressions.appliesTo(file)) {
       return [];
     }
-    return presetRuleSets()
-      .map(({ name }) => name)
-      .filter((name) => this.preset.items[name] !== false);
+    return expressionRules()
+      .map(({ id }) => id)
+      .filter((id) => this.expressions.items[id] !== false);
   }
 
-  /** ファイルに適用する entries。プリセット、利用者が追加したルールセットの順に返す */
+  /** ファイルに適用する entries。表現のルール、利用者が追加したルールセットの順に返す */
   entriesFor(file: string): Entry[] {
-    const names = this.presetRuleSetsFor(file);
+    const ids = this.expressionRulesFor(file);
     return [
-      ...presetRuleSets()
-        .filter(({ name }) => names.includes(name))
+      ...expressionRules()
+        .filter(({ id }) => ids.includes(id))
         .flatMap(({ entries }) => entries),
       ...this.ruleSetsFor(file).flatMap(({ entries }) => entries),
     ];
@@ -225,11 +255,14 @@ export class Config {
     const exclude: string[] = [];
     const ruleSets: RuleSet[] = [];
     const warnings: string[] = [];
-    const preset = new Merged("preset", "rule_sets", true);
+    const expressions = new Merged("expressions", "rules", true);
+    Object.assign(expressions.items, EXPRESSION_RULES);
     // textlint のルールは、文体の好みに依存する部分が大きく、文章ではないファイルも検出するため、設定で有効にした場合にのみ適用する
     const textlint = new Merged("textlint", "rules", false);
     textlint.include = new Globs("include", resolveGlobs(TEXTLINT_INCLUDE, "/", home));
     Object.assign(textlint.items, TEXTLINT_RULES);
+    // 返答のチェックは、検出のたびに返答の再出力を伴うため、設定で有効にした場合にのみ適用する
+    const replies: Replies = { japanese: false, check: false };
 
     for (const { path, file, base } of layers) {
       const context = (error: unknown) =>
@@ -237,7 +270,14 @@ export class Config {
       // 設定ファイルに記述したルールセットと、rule_files のファイルのルールセットを、読み込む順に並べる
       const sources: { path: string; sets: unknown[] }[] = [];
       try {
-        rejectUnknownKeys(file, ["exclude", "rule_files", "rule_sets", "preset", "textlint"]);
+        rejectUnknownKeys(file, [
+          "exclude",
+          "rule_files",
+          "rule_sets",
+          "expressions",
+          "textlint",
+          "replies",
+        ]);
         exclude.push(...resolveGlobs(stringArray("exclude", file.exclude ?? []), base, home));
         // 不正な glob は、記述した設定ファイルのエラーとして報告する
         new Globs("exclude", exclude);
@@ -263,8 +303,9 @@ export class Config {
           }
         }
         sources.push({ path, sets: ruleSetArray(file.rule_sets) });
-        preset.merge(file.preset, base, home);
+        expressions.merge(file.expressions, base, home);
         textlint.merge(file.textlint, base, home);
+        mergeReplies(replies, file.replies);
       } catch (error) {
         throw context(error);
       }
@@ -275,7 +316,8 @@ export class Config {
             if (!isTable(raw)) {
               throw new Error("テーブルを指定してください");
             }
-            rejectUnknownKeys(raw, ["name", "include", "exclude", "entries"]);
+            // id は表現のルールが使用する。jai-smell expressions の出力を rule_files で読み込めるように、記述を許可する
+            rejectUnknownKeys(raw, ["id", "name", "include", "exclude", "entries"]);
             if (typeof raw.name !== "string") {
               throw new Error("name には文字列を指定してください");
             }
@@ -302,15 +344,15 @@ export class Config {
       }
     }
 
-    const names = presetRuleSets().map(({ name }) => name);
-    for (const [name, value] of Object.entries(preset.items)) {
+    const names = expressionRules().map(({ id }) => id);
+    for (const [name, value] of Object.entries(expressions.items)) {
       if (typeof value !== "boolean") {
-        throw new Error(`preset.rule_sets の ${name} には、true または false を指定してください`);
+        throw new Error(`expressions.rules の ${name} には、true または false を指定してください`);
       }
-      // プリセットのルールセットの名前は、バージョンによって異なる場合があるため、エラーにせずチェックを継続する
+      // 表現のルールの名前は、バージョンによって異なる場合があるため、エラーにせずチェックを継続する
       if (!names.includes(name)) {
         warnings.push(
-          `preset.rule_sets の ${name} は、プリセットのルールセットではありません（プリセットのルールセット: ${names.join("、")}）`,
+          `expressions.rules の ${name} は、表現のルールの名前ではありません（表現のルール: ${names.join("、")}）`,
         );
       }
     }
@@ -318,8 +360,9 @@ export class Config {
       paths,
       new Globs("exclude", exclude),
       ruleSets,
-      preset.toBuiltIn(),
+      expressions.toBuiltIn(),
       textlint.toBuiltIn(),
+      replies,
       warnings,
     );
   }
@@ -378,6 +421,30 @@ class Merged {
 
   toBuiltIn(): BuiltIn {
     return new BuiltIn(this.enabled, new Filter(this.include, this.exclude), this.items);
+  }
+}
+
+function mergeReplies(replies: Replies, table: unknown): void {
+  if (table === undefined) {
+    return;
+  }
+  try {
+    if (!isTable(table)) {
+      throw new Error("テーブルを指定してください");
+    }
+    rejectUnknownKeys(table, [...REPLIES_KEYS]);
+    for (const key of REPLIES_KEYS) {
+      const value = table[key];
+      if (value === undefined) {
+        continue;
+      }
+      if (typeof value !== "boolean") {
+        throw new Error(`${key} には、true または false を指定してください`);
+      }
+      replies[key] = value;
+    }
+  } catch (error) {
+    throw new Error(`replies: ${(error as Error).message}`);
   }
 }
 

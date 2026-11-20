@@ -4,10 +4,14 @@ exclude = [
   "tests/**",
   "plugin/output-styles/**",
   "plugin/skills/**",
-  "config/preset-rules.toml",
-  "config/custom-rules.toml",
+  "config/expression-rules.toml",
   "packaging/homebrew/jai-smell.rb",
 ]
+
+# このリポジトリの文書は、硬い文体と表記に統一する
+[expressions.rules]
+colloquial = true
+prefer-hiragana = true
 
 [textlint]
 enabled = true

@@ -3,14 +3,10 @@ import { expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { type Output, REPOSITORY, run } from "./helpers.ts";
+import { type Output, run } from "./helpers.ts";
 
-/** jai-smell init が作成するファイル */
-const FILES = ["jai-smell.toml", "custom-rules.toml"];
 const MANUAL = "claude plugin marketplace add bufferings/jai-smell";
 const BUN_DIR = dirname(process.execPath);
-
-const source = (name: string) => readFileSync(join(REPOSITORY, "config", name), "utf8");
 
 class Home {
   readonly root: string;
@@ -19,10 +15,6 @@ class Home {
     this.root = join(tmpdir(), `jai-smell-init-${process.pid}-${name}`);
     rmSync(this.root, { recursive: true, force: true });
     mkdirSync(this.root, { recursive: true });
-  }
-
-  config(name: string): string {
-    return readFileSync(join(this.root, ".config/jai-smell", name), "utf8");
   }
 
   write(path: string, text: string): string {
@@ -58,28 +50,11 @@ class Home {
   }
 }
 
-test("設定ファイルを作成し、claude がない場合はプラグインのインストール手順を出力する", () => {
+test("claude がない場合は、プラグインのインストール手順を出力する", () => {
   const home = new Home("no-claude");
   const output = home.init([]);
   expect(output.code).toBe(1);
-  for (const name of FILES) {
-    expect(home.config(name)).toBe(source(name));
-  }
   expect(output.stdout).toContain(MANUAL);
-});
-
-test("すでに存在する設定ファイルは変更しない", () => {
-  const home = new Home("existing");
-  for (const name of FILES) {
-    home.write(`.config/jai-smell/${name}`, "# 既存の内容\n");
-  }
-  const output = home.init([]);
-  for (const name of FILES) {
-    expect(home.config(name)).toBe("# 既存の内容\n");
-  }
-  expect(output.stdout).toContain("jai-smell.toml はすでに存在するため");
-  // プリセットはバイナリに含まれるため、ファイルとして作成しない
-  expect(existsSync(join(home.root, ".config/jai-smell/preset-rules.toml"))).toBe(false);
 });
 
 test("claude がある場合は、プラグインをインストールする", () => {

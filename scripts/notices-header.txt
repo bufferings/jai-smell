@@ -49,7 +49,7 @@ notice and license are included in the kuromoji section below.
 p1ass/textlint-rule-preset-ai-words-ja
 https://github.com/p1ass/textlint-rule-preset-ai-words-ja
 
-Many entries in config/preset-rules.toml, and the way they are written,
+Many entries in config/expression-rules.toml, and the way they are written,
 are based on the dictionary of this project.
 ===========================================================================
 

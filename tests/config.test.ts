@@ -8,13 +8,22 @@ const HOME = "/home/me";
 const HOME_CONFIG = "/home/me/.config/jai-smell/jai-smell.toml";
 const PROJECT_CONFIG = "/repo/jai-smell.toml";
 const DOCS_CONFIG = "/repo/docs/jai-smell.toml";
-const PRESET = [
-  "不自然な日本語化",
-  "比喩",
-  "話し言葉",
-  "技術文書で一般的ではない用語",
-  "漢字をひらく",
-];
+/** デフォルトで適用する、表現のルール */
+const DEFAULTS = ["translationese", "metaphor", "unusual-terms"];
+/** 設定で有効にした場合にのみ適用する、表現のルール */
+const OPT_IN = ["colloquial", "prefer-hiragana"];
+/** 表現のルールの定義の順序 */
+const ALL = ["translationese", "metaphor", "colloquial", "unusual-terms", "prefer-hiragana"];
+
+/** デフォルトでは無効にする textlint のルール */
+const TEXTLINT_OFF = {
+  "no-mix-dearu-desumasu": false,
+  "no-ai-list-formatting": false,
+  "no-ai-hype-expressions": false,
+  "no-ai-emphasis-patterns": false,
+  "ai-tech-writing-guideline": false,
+  "no-ai-colon-continuation": false,
+};
 
 const ruleSet = (name: string, extra = "") =>
   `[[rule_sets]]\nname = "${name}"\n${extra}\n[[rule_sets.entries]]\nmessage = "${name}"\ntokens = [{ pos = "名詞" }]\n`;
@@ -46,11 +55,17 @@ const applied = (config: Config, path: string) => config.ruleSetsFor(path).map((
 test("設定ファイルがない場合は、組み込みのデフォルトを使用する", () => {
   const config = Config.build([], HOME);
   expect(config.paths).toEqual([]);
-  expect(config.presetRuleSetsFor("/work/a.rs")).toEqual(PRESET);
-  expect(config.entriesFor("/work/a.rs").length).toBeGreaterThan(100);
+  // 文体の方針を適用するルールセットは、設定で有効にした場合にのみ適用する
+  expect(config.expressionRulesFor("/work/a.rs")).toEqual(DEFAULTS);
+  expect(config.entriesFor("/work/a.rs").length).toBeGreaterThan(50);
+  const enabled = single(
+    `[expressions.rules]\n${OPT_IN.map((name) => `${name} = true\n`).join("")}`,
+  );
+  expect(enabled.expressionRulesFor("/repo/a.rs")).toEqual(ALL);
+  expect(enabled.entriesFor("/repo/a.rs").length).toBeGreaterThan(100);
   // textlint のルールは、設定で有効にした場合にのみ適用する
   expect(config.appliesTextlintTo("/work/a.md")).toBe(false);
-  expect(config.textlint.items).toEqual({ "no-mix-dearu-desumasu": false });
+  expect(config.textlint.items).toEqual(TEXTLINT_OFF);
 });
 
 test("textlint を有効にした場合は、デフォルトでは .md と .txt のファイルに適用する", () => {
@@ -108,31 +123,35 @@ test("追加のルールセットは、すべての設定ファイルのもの�
   expect(applied(config, "/repo/src/a.rs")).toEqual(["home", "inner"]);
 });
 
-test("preset は、キーごと、およびルールセットの名前ごとに、後の設定ファイルの値を使用する", () => {
+test("expressions は、キーごと、およびルールの名前ごとに、後の設定ファイルの値を使用する", () => {
   let config = layered(
-    '[preset]\ninclude = ["**/*.md"]\n[preset.rule_sets]\n"比喩" = false\n"話し言葉" = false\n',
-    '[preset.rule_sets]\n"話し言葉" = true\n',
+    '[expressions]\ninclude = ["**/*.md"]\n[expressions.rules]\nmetaphor = false\ncolloquial = false\n',
+    "[expressions.rules]\ncolloquial = true\n",
   );
-  expect(config.presetRuleSetsFor("/repo/a.md")).toEqual(PRESET.filter((name) => name !== "比喩"));
-  expect(config.presetRuleSetsFor("/repo/a.rs")).toEqual([]);
-  config = layered("[preset]\nenabled = false\n", "", "[preset]\nenabled = true\n");
-  expect(config.presetRuleSetsFor("/repo/docs/a.md")).toEqual(PRESET);
-  config = layered("[preset]\nenabled = false\n", "");
-  expect(config.presetRuleSetsFor("/repo/a.md")).toEqual([]);
+  expect(config.expressionRulesFor("/repo/a.md")).toEqual([
+    "translationese",
+    "colloquial",
+    "unusual-terms",
+  ]);
+  expect(config.expressionRulesFor("/repo/a.rs")).toEqual([]);
+  config = layered("[expressions]\nenabled = false\n", "", "[expressions]\nenabled = true\n");
+  expect(config.expressionRulesFor("/repo/docs/a.md")).toEqual(DEFAULTS);
+  config = layered("[expressions]\nenabled = false\n", "");
+  expect(config.expressionRulesFor("/repo/a.md")).toEqual([]);
   // exclude も、後の設定ファイルの値に置き換える
   config = layered(
-    '[preset]\nexclude = ["**/CHANGELOG.md"]\n',
-    '[preset]\nexclude = ["drafts/**"]\n',
+    '[expressions]\nexclude = ["**/CHANGELOG.md"]\n',
+    '[expressions]\nexclude = ["drafts/**"]\n',
   );
-  expect(config.presetRuleSetsFor("/repo/CHANGELOG.md")).toEqual(PRESET);
-  expect(config.presetRuleSetsFor("/repo/drafts/a.md")).toEqual([]);
+  expect(config.expressionRulesFor("/repo/CHANGELOG.md")).toEqual(DEFAULTS);
+  expect(config.expressionRulesFor("/repo/drafts/a.md")).toEqual([]);
 });
 
-test("preset.rule_sets の不明な名前は、警告としてチェックを継続する", () => {
-  const config = single('[preset.rule_sets]\n"存在しない" = false\n');
+test("expressions.rules の不明な名前は、警告としてチェックを継続する", () => {
+  const config = single('[expressions.rules]\n"存在しない" = false\n');
   expect(config.warnings.length).toBe(1);
   expect(config.warnings[0]).toContain("存在しない");
-  expect(config.presetRuleSetsFor("/repo/a.md")).toEqual(PRESET);
+  expect(config.expressionRulesFor("/repo/a.md")).toEqual(DEFAULTS);
 });
 
 test("textlint は、キーごと、およびルールの名前ごとに、後の設定ファイルの値を使用する", () => {
@@ -141,7 +160,7 @@ test("textlint は、キーごと、およびルールの名前ごとに、後�
     '[textlint]\nenabled = true\ninclude = ["docs/**"]\n[textlint.rules]\nsentence-length = { skipPatterns = [] }\n',
   );
   expect(config.textlint.items).toEqual({
-    "no-mix-dearu-desumasu": false,
+    ...TEXTLINT_OFF,
     "max-ten": false,
     "sentence-length": { skipPatterns: [] },
   });
@@ -174,8 +193,8 @@ test("不正な設定はエラーにする", () => {
   );
   expect(() => single("[textlint]\nunknown = 1")).toThrow("textlint: 不明なフィールド");
   expect(() => single("[textlint]\ninclude = []")).toThrow("textlint: include に空の配列");
-  expect(() => single('[preset]\nenabled = "no"')).toThrow("preset: enabled");
-  expect(() => single('[preset.rule_sets]\n"比喩" = "off"')).toThrow("比喩");
+  expect(() => single('[expressions]\nenabled = "no"')).toThrow("expressions: enabled");
+  expect(() => single('[expressions.rules]\nmetaphor = "off"')).toThrow("metaphor");
   expect(() => Config.build([layer(PROJECT_CONFIG, 'exclude = ["~/a"]')], undefined)).toThrow(
     "HOME",
   );
@@ -284,11 +303,4 @@ test("ユーザー全体の設定のディレクトリ内のファイルでは�
   const config = workspace.discover("home/.config/jai-smell/notes.md");
   expect(names(config)).toEqual(["home"]);
   expect(config.paths.length).toBe(1);
-});
-
-test("リポジトリの config/jai-smell.toml を読み込む", () => {
-  const config = Config.load(join(import.meta.dir, "../config/jai-smell.toml"));
-  expect(config.paths.length).toBe(2);
-  expect(config.ruleSets).toEqual([]);
-  expect(config.warnings).toEqual([]);
 });

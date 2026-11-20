@@ -2,34 +2,43 @@
 
 Claude Code が作成した日本語の文章から、修正を検討すべき表現を検出するツールです。Claude Code のフックとして動作し、ファイルの編集内容をチェックして、検出結果を Claude にフィードバックします。Claude はフィードバックの内容に基づいて、該当箇所を修正します。
 
-プラグインには、日本語の文章規範も含まれています。Claude の返答に適用する出力スタイル `japanese-replies` と、技術文書の作成・推敲に使用するスキル `japanese-tech-writing` です。検出する表現を追加する場合は、スキル `add-custom-rule` を使用できます。
+プラグインには、日本語の文章規範も含まれています。Claude の返答に適用する出力スタイル `japanese-replies` と、技術文書の作成・推敲に使用するスキル `japanese-tech-writing` です。検出する表現を追加する場合は、スキル `add-custom-rule` を使用できます。設定ファイルは、スキル `configure` で作成できます。
 
-jai-smell が提供するプリセットには、次の 5 つのルールセットを収録しています。プリセットはバイナリに含まれており、`jai-smell preset` で内容を出力できます。
+jai-smell は、次の 5 つの「表現のルール」を提供しています。表現のルールはバイナリに含まれており、`jai-smell expressions` で内容を出力できます。
 
-- 不自然な日本語化：英語の表現を日本語に置き換えた不自然な表現（`既定では`、`走る` など）
-- 比喩：物事を別のものにたとえた表現（`落とし穴`、`土台` など）
-- 話し言葉：文書では用いない話し言葉（`見る`、`使う` など）
-- 技術文書で一般的ではない用語：他の分野の用語のうち、技術文書には適さない表現（`地の文` など）
-- 漢字をひらく：漢字ではなく、ひらがなで記述する表記（`無い`、`紐づけ` など）
+| 名前 | 検出する表現 | デフォルト |
+| --- | --- | --- |
+| `translationese`（不自然な日本語化） | 英語の表現を日本語に置き換えた不自然な表現（`既定では`、`走る` など） | 適用します |
+| `metaphor`（比喩） | 物事を別のものにたとえた表現（`落とし穴`、`土台` など） | 適用します |
+| `unusual-terms`（技術文書で一般的ではない用語） | 他の分野の用語のうち、技術文書には適さない表現（`地の文` など） | 適用します |
+| `colloquial`（話し言葉） | 文書では用いない話し言葉（`見る`、`使う` など） | 設定で有効にした場合に適用します |
+| `prefer-hiragana`（漢字をひらく） | 漢字ではなく、ひらがなで記述する表記（`無い`、`紐づけ` など） | 設定で有効にした場合に適用します |
+
+デフォルトで適用する 3 つは、AI が生成した文章に多い表現を対象としています。`colloquial` と `prefer-hiragana` は、文書を硬い文体と表記に統一するためのルールです。統一するかどうかは文書の方針によるため、[設定](#expressions)で有効にした場合にのみ適用します。
 
 文章を形態素解析（[kuromoji](https://github.com/takuyaa/kuromoji.js) と IPADIC）によって分割した後に条件と比較するため、たとえば `穴` を検出対象に設定しても、`落とし穴` は検出されません。
 
-ルールセットに加えて、[textlint](https://textlint.org/) のルール（[textlint-rule-preset-ja-technical-writing](https://github.com/textlint-ja/textlint-rule-preset-ja-technical-writing)）も、設定で有効にすると適用できます。同じ助詞の重複、1 文の長さ、読点の数、二重否定などを検出します。textlint とルールは jai-smell のバイナリに含まれているため、Node.js と textlint のインストールは不要です。
+表現のルールに加えて、[textlint](https://textlint.org/) のルールも、設定で有効にすると適用できます。textlint の次の 2 つのプリセットのルールを使用できます。
+
+- [textlint-rule-preset-ja-technical-writing](https://github.com/textlint-ja/textlint-rule-preset-ja-technical-writing)：同じ助詞の重複、1 文の長さ、読点の数、二重否定などを検出します。
+- [@textlint-ja/textlint-rule-preset-ai-writing](https://github.com/textlint-ja/textlint-rule-preset-ai-writing)：AI が生成した文章に多い記述を検出します。リスト項目の先頭の太字と絵文字、誇張表現、コロンで終わる文などが対象です。ルールごとに、設定で有効にした場合にのみ適用します。
+
+textlint とルールは jai-smell のバイナリに含まれているため、Node.js と textlint のインストールは不要です。
 
 ファイルの編集に対するフィードバックの例を示します。
 
 ```
 修正を検討すべき表現の候補を検出しました。チェック対象は今回の編集で追加・変更された部分のみです（行番号はその部分の中での位置を示します）。各箇所を確認し、該当する場合のみ修正してください。
 docs/ci.md:3:12: "走る" は、英語の表現を日本語に置き換えた不自然な表現です。定着したカタカナ語や一般的な表現に言い換えてください。例: 「実行される」「動作する」。例が文脈に適さない場合は、例を使用せずに文の構成を見直してください。
-docs/ci.md:5:11: "見る" は、文書では用いない話し言葉です。文脈に応じて、「確認する」「参照する」「対象とする」などの書き言葉に言い換えてください。
+docs/ci.md:5:9: "落とし穴" は、物事を別のものにたとえた比喩的な表現です。比喩を使用せず、対象と状態を具体的に記述してください。例: 「注意点」「問題点」。例が文脈に適さない場合は、例を使用せずに文の構成を見直してください。
 ```
 
 ## 参考にした情報源
 
-プリセットは、次の情報源を参考に作成しています。
+表現のルールは、次の情報源を参考に作成しています。
 
 - [p1ass/textlint-rule-preset-ai-words-ja](https://github.com/p1ass/textlint-rule-preset-ai-words-ja)（MIT License）
-  - 「不自然な日本語化」と「比喩」の多くの項目と、その条件の記述は、このプリセットの辞書を元にしています。プリセットでは、該当する項目に「出典: p1ass」と記載しています。 <!-- jai-smell-disable-next-line 変わった -->
+  - 「不自然な日本語化」と「比喩」の多くの項目と、その条件の記述は、この textlint のプリセットの辞書を元にしています。表現のルールでは、該当する項目に「出典: p1ass」と記載しています。 <!-- jai-smell-disable-next-line 変わった -->
 - [生成AI以前と以後でエンジニアの文章はどう変わったのか: Qiitaの7万記事を数えてみた話](https://nyosegawa.com/posts/qiita-writing-before-after-ai/)（逆瀬川ちゃんのブログ）
   - p1ass/textlint-rule-preset-ai-words-ja の辞書の元になった分析です。
 
@@ -43,11 +52,12 @@ textlint のルールは、次のプロジェクトのものを変更せずに�
 
 - [textlint](https://github.com/textlint/textlint)（MIT License）
 - [textlint-ja/textlint-rule-preset-ja-technical-writing](https://github.com/textlint-ja/textlint-rule-preset-ja-technical-writing)（MIT License）
+- [textlint-ja/textlint-rule-preset-ai-writing](https://github.com/textlint-ja/textlint-rule-preset-ai-writing)（MIT License）
 
 ## 動作環境
 
 - macOS（Apple Silicon）。ビルド済みバイナリは、この環境向けのみ提供しています。その他の環境では、ソースからビルドしてください。
-- バイナリのサイズは約 109 MB です。JavaScript の実行環境（Bun）、textlint とルール、形態素解析の辞書を含みます。
+- バイナリのサイズは約 114 MB です。JavaScript の実行環境（Bun）、textlint とルール、形態素解析の辞書を含みます。
 - フックとして利用する場合は、[Claude Code](https://docs.claude.com/ja/docs/claude-code/overview) が必要です。
 
 ## インストール
@@ -59,14 +69,17 @@ brew install bufferings/tap/jai-smell
 jai-smell init
 ```
 
-`jai-smell init` は、次の処理を実行します。
+`jai-smell init` は、Claude Code のプラグイン `jai-smell@jai-smell` をインストールします。`claude` コマンドが見つからない場合は、インストール手順を表示します。Homebrew の formula はインストール時にホームディレクトリへ書き込めないため、`brew install` の後に実行してください。起動中の Claude Code のセッションには、次回の起動時から反映されます。
 
-- `~/.config/jai-smell/` に、次の 2 つの設定ファイルを作成します。すでに存在する場合は変更しません。
-  - `jai-smell.toml`：ユーザー全体の設定。設定の説明と記述例をコメントとして記載しています。
-  - `custom-rules.toml`：利用者が追加するルールセット。
-- Claude Code のプラグイン `jai-smell@jai-smell` をインストールします。`claude` コマンドが見つからない場合は、インストール手順を表示します。
+設定ファイルがない場合は、デフォルトの表現のルールをすべてのファイルに適用します。
 
-設定ファイルがなくても、プリセットは適用されます。設定を変更しない場合は、プラグインのインストールのみが必要です。Homebrew の formula はインストール時にホームディレクトリへ書き込めないため、`brew install` の後に `jai-smell init` を実行してください。起動中の Claude Code のセッションには、次回の起動時から反映されます。
+検出する内容を変更する場合は、Claude Code でスキル `configure` を実行します。
+
+```sh
+claude "/jai-smell:configure"
+```
+
+Claude が、検出する内容の一覧（表現のルールと、textlint のルール）を提示します。利用者が選択した項目から、設定ファイルを作成します。設定ファイルを直接記述する場合は、[設定](#設定)を参照してください。
 
 ### ソースからのインストール
 
@@ -100,7 +113,7 @@ claude plugin marketplace update jai-smell
 claude plugin update jai-smell@jai-smell
 ```
 
-- プリセットと textlint のルールはバイナリに含まれているため、`brew upgrade` で更新されます。検出結果は、ルールの追加や変更によって、アップグレードの前後で異なる場合があります。
+- 表現のルールと textlint のルールはバイナリに含まれているため、`brew upgrade` で更新されます。検出結果は、ルールの追加や変更によって、アップグレードの前後で異なる場合があります。
 - プラグインは `brew upgrade` ではアップデートされないため、`claude plugin` コマンドでアップデートしてください。
 
 ## 使い方
@@ -111,7 +124,7 @@ claude plugin update jai-smell@jai-smell
 
 - Claude Code がファイルを編集するたびに（PostToolUse フック）、その編集で追加・変更された部分のみをチェックします。編集前からファイルに存在していた文章は、チェックの対象外です。
 - 検出した場合は、終了コード 2 で終了し、検出結果を Claude にフィードバックします。
-- Claude の返答はチェックしません。返答の表現は、プラグインに含まれる出力スタイル `japanese-replies` で指示します。
+- Claude の返答は、デフォルトではチェックしません。設定ファイルの [replies](#replies) で有効にすると、返答の終了時（Stop フック）にチェックします。返答の表現は、出力スタイル `japanese-replies` でも指示できます。
 
 設定ファイルの読み込みに失敗した場合など、jai-smell 自体の処理が失敗した場合は、終了コード 1 で終了します。この場合、Claude へのフィードバックは行わず、Claude の処理も中断しません。
 
@@ -123,7 +136,8 @@ claude plugin update jai-smell@jai-smell
 | --- | --- | --- |
 | 出力スタイル | `japanese-replies` | Claude の返答に適用する規範。結論を先に述べ、技術文書で一般的な表現で記述するよう指示します |
 | スキル | `japanese-tech-writing` | 日本語の技術文書を作成・推敲する際の規範。段落と論証の構成、用語と表現、翻訳調の比喩と擬人化の禁止などを定めます |
-| スキル | `add-custom-rule` | 検出する表現のルールを `custom-rules.toml` に登録する手順。形態素の条件を `jai-smell` コマンドで検証し、プリセットとの重複を確認します |
+| スキル | `add-custom-rule` | 検出する表現のルールを `custom-rules.toml` に登録する手順。形態素の条件を `jai-smell` コマンドで検証し、jai-smell が提供する表現のルールとの重複を確認します |
+| スキル | `configure` | 設定ファイル（`jai-smell.toml`）を作成・変更する手順。検出する内容の一覧から項目を選択し、利用者の文書での検出件数を確認して調整します |
 
 **出力スタイル**
 
@@ -133,8 +147,9 @@ claude plugin update jai-smell@jai-smell
 
 **スキル**
 
-- `japanese-tech-writing` は、日本語の技術文書を作成・推敲する際に、Claude が必要に応じて読み込みます。明示的に使用する場合は、`/jai-smell:japanese-tech-writing` を実行します。
-- `add-custom-rule` は、検出する表現の追加を依頼した際に、Claude が必要に応じて読み込みます。明示的に使用する場合は、`/jai-smell:add-custom-rule 検出する表現` を実行します。Claude は、検出すべき例文と検出してはならない例文を作成し、候補の条件を `jai-smell --config` で検証します。検証した条件は、`~/.config/jai-smell/custom-rules.toml` に登録します。
+- `japanese-tech-writing` は、日本語の技術文書を作成・推敲する際に、Claude が自動で読み込みます。明示的に使用する場合は、`/jai-smell:japanese-tech-writing` を実行します。
+- `add-custom-rule` は、検出する表現の追加を依頼した際に、Claude が自動で読み込みます。明示的に使用する場合は、`/jai-smell:add-custom-rule 検出する表現` を実行します。Claude は、検出すべき例文と検出してはならない例文を作成し、候補の条件を `jai-smell --config` で検証します。検証した条件は、`~/.config/jai-smell/custom-rules.toml` に登録します。
+- `configure` は、jai-smell の設定を依頼した際に、Claude が自動で読み込みます。明示的に使用する場合は、`/jai-smell:configure` を実行します。Claude は、検出する内容の一覧（表現のルールと、textlint のルール）を、内容の説明と現在の設定とあわせて提示します。利用者が番号で選択した項目から、設定ファイルを作成します。その後に、利用者の文書での検出件数を提示し、件数の多い項目の扱いを質問します。
 
 ### コマンドとして使用する
 
@@ -157,15 +172,15 @@ jai-smell docs/*.md
 | コマンド | 内容 |
 | --- | --- |
 | `jai-smell config <file>` | 読み込んだ設定ファイルと、ファイルに適用する設定を出力します |
-| `jai-smell preset` | プリセットの内容を出力します |
-| `jai-smell init` | 設定ファイルのひな形を作成し、Claude Code のプラグインをインストールします |
+| `jai-smell expressions` | jai-smell が提供する、表現のルールの内容を出力します |
+| `jai-smell init` | Claude Code のプラグインをインストールします |
 
 ### チェック対象
 
 - `.md` ファイルは、Markdown として解析します。コードブロック、インラインコード、HTML、リンクの URL はチェックの対象外です。
 - ソースコード（`.ts`、`.py`、`.rs` など）は、コメントと文字列リテラルをチェックします。詳細は[ソースコードのチェック](#ソースコードのチェック)を参照してください。
 - その他のファイル（`.txt`、`.yml` など）は、プレーンテキストとしてファイル全体をチェックします。
-- プリセットと追加のルールセットは、デフォルトではすべてのファイルに適用します。
+- 表現のルールと追加のルールセットは、デフォルトではすべてのファイルに適用します。
 - textlint のルールは、設定で有効にした場合のみ適用します。適用するファイルのデフォルトは、`.md` と `.txt` です。
 - 設定の `exclude` に一致するファイルと、読み込んだ設定ファイルおよび `rule_files` に指定したファイル自体は、チェックの対象外です。
 
@@ -173,7 +188,7 @@ jai-smell docs/*.md
 
 ソースコードは、[highlight.js](https://highlightjs.org/) で構文を解析し、コメントと文字列リテラルを抽出してチェックします。識別子などのコードの記述と、文字列リテラルの中のコメントの記号（`"http://example.com"` の `//`）は、チェックの対象外です。
 
-| 対象 | プリセットと追加のルールセット | textlint のルール |
+| 対象 | 表現のルールと追加のルールセット | textlint のルール |
 | --- | --- | --- |
 | コメント | 適用します | `include` にファイルを指定した場合に適用します |
 | 文字列リテラル | 適用します | 適用しません。文の断片が多いためです |
@@ -218,10 +233,55 @@ textlint のルールの検出結果は、ルールの名前で指定します�
 
 | チェック | デフォルト |
 | --- | --- |
-| プリセット | すべてのファイルに、すべてのルールセットを適用します |
+| 表現のルール | すべてのファイルに適用します。`colloquial`（話し言葉）と `prefer-hiragana`（漢字をひらく）は、[expressions](#expressions) の `rules` に `true` を指定した場合に適用します |
 | textlint のルール | 適用しません。[textlint](#textlint) の `enabled` に `true` を指定した場合に適用します |
+| Claude の返答のチェック | 適用しません。[replies](#replies) の `japanese` または `check` に `true` を指定した場合に適用します |
 
-デフォルトを変更する場合と、ルールセットを追加する場合に、設定ファイルを作成します。
+デフォルトを変更する場合と、ルールセットを追加する場合に、設定ファイルを作成します。Claude Code では、スキル `configure` を使用すると、検出する内容の一覧から項目を選択して、設定ファイルを作成できます。
+
+すべての項目を記述した例を示します。必要な項目だけを記述してください。各項目の詳細は、以降の節を参照してください。
+
+```toml
+# チェックの対象外とするファイル
+exclude = ["**/CHANGELOG.md"]
+
+# 追加するルールセットを記述したファイル
+rule_files = ["custom-rules.toml"]
+
+# 表現のルールの設定
+[expressions]
+enabled = true
+include = ["**/*.md"]
+exclude = ["docs/archive/**"]
+
+[expressions.rules]
+colloquial = true
+metaphor = false
+
+# textlint のルールの設定
+[textlint]
+enabled = true
+include = ["**/*.md", "**/*.txt", "**/*.ts"]
+exclude = ["docs/archive/**"]
+
+[textlint.rules]
+sentence-length = { max = 120 }
+no-exclamation-question-mark = false
+no-ai-list-formatting = true
+
+# Claude の返答のチェックの設定
+[replies]
+japanese = true
+check = true
+
+# この設定ファイルに直接記述するルールセット
+[[rule_sets]]
+name = "表記の統一"
+
+[[rule_sets.entries]]
+message = "\"サーバ\" は、表記を統一するため、「サーバー」と記述してください。"
+tokens = [{ pos = "名詞", surface_form = "サーバ" }]
+```
 
 ### 設定ファイルの配置と優先順位
 
@@ -229,7 +289,7 @@ textlint のルールの検出結果は、ルールの名前で指定します�
 
 | 配置場所 | 用途 |
 | --- | --- |
-| `~/.config/jai-smell/jai-smell.toml` | ユーザー全体の設定。すべてのファイルに適用します。`jai-smell init` で作成できます |
+| `~/.config/jai-smell/jai-smell.toml` | ユーザー全体の設定。すべてのファイルに適用します |
 | リポジトリのルート、またはその下位のディレクトリの `jai-smell.toml` | そのディレクトリ以下のファイルに適用する設定 |
 
 設定は、組み込みのデフォルト、ユーザー全体の設定、上位のディレクトリの `jai-smell.toml`、下位のディレクトリの `jai-smell.toml` の順に統合します。同じ項目を複数の設定ファイルに記述した場合は、チェック対象のファイルに近い設定ファイルの指定を優先します。
@@ -246,7 +306,8 @@ repo/docs/blog/jai-smell.toml        # repo/docs/blog 以下のファイルに�
 | --- | --- |
 | `exclude` | すべての設定ファイルの指定を合わせて適用します |
 | `rule_sets`、`rule_files` | すべての設定ファイルのルールセットを追加します |
-| `preset`、`textlint` | キーごと、およびルールセットとルールの名前ごとに、チェック対象のファイルに近い設定ファイルの値を使用します |
+| `expressions`、`textlint` | キーごと、およびルールの名前ごとに、チェック対象のファイルに近い設定ファイルの値を使用します |
+| `replies` | キーごとに、作業ディレクトリに近い設定ファイルの値を使用します |
 
 `jai-smell.toml` の探索は、チェック対象のファイルのディレクトリから上位に向かって行い、`.git` があるディレクトリで停止します。リポジトリの外にある `jai-smell.toml` は読み込みません。リポジトリ内に作成した worktree では、元のリポジトリの `jai-smell.toml` も読み込みません。Git リポジトリの外のファイルでは、ホームディレクトリの手前で停止します。ホームディレクトリの直下の `jai-smell.toml` は読み込まないため、すべてのファイルに適用する設定は、ユーザー全体の設定に記述してください。
 
@@ -265,14 +326,18 @@ $ jai-smell config docs/blog/post.md
   /Users/example/src/repo/docs/blog/jai-smell.toml
 
 /Users/example/src/repo/docs/blog/post.md に適用する設定:
-  プリセット:
-    適用するルールセット: 不自然な日本語化、比喩、技術文書で一般的ではない用語
-    適用しないルールセット: 話し言葉
+  表現のルール:
+    適用するルール: translationese（不自然な日本語化）、colloquial（話し言葉）、unusual-terms（技術文書で一般的ではない用語）
+    適用しないルール: metaphor（比喩）、prefer-hiragana（漢字をひらく）
   追加のルールセット: 表記の統一
   textlint:
     適用するルール: sentence-length、max-comma、…
     適用しないルール: no-mix-dearu-desumasu
     オプション: sentence-length = {"max":150}
+
+Claude の返答のチェック（replies）:
+  japanese（日本語が含まれない返答の検出）: 適用しない
+  check（表現のルール、追加のルールセット、textlint のルールの適用）: 適用しない
 ```
 
 ### glob の形式
@@ -285,42 +350,44 @@ $ jai-smell config docs/blog/post.md
 
 ### exclude
 
-チェックの対象外とするファイルを指定します。一致するファイルには、プリセット、追加のルールセット、textlint のルールのいずれも適用しません。
+チェックの対象外とするファイルを指定します。一致するファイルには、表現のルール、追加のルールセット、textlint のルールのいずれも適用しません。
 
 ```toml
 exclude = ["tests/**", "vendor/**"]
 ```
 
 - すべての設定ファイルの `exclude` を合わせて適用します。上位のディレクトリの設定ファイルやユーザー全体の設定で対象外としたファイルを、下位のディレクトリの設定ファイルで対象に戻すことはできません。
-- 一部のチェックのみを対象外とする場合は、`preset`、`textlint`、またはルールセットの `exclude` を使用します。
+- 一部のチェックのみを対象外とする場合は、`expressions`、`textlint`、またはルールセットの `exclude` を使用します。
 
-### preset
+### expressions
 
-プリセットの設定を指定します。
+jai-smell が提供する、表現のルールの設定を指定します。
 
 ```toml
-[preset]
+[expressions]
 include = ["**/*.md"]
 
-[preset.rule_sets]
-"比喩" = false
+[expressions.rules]
+colloquial = true
+prefer-hiragana = true
+metaphor = false
 ```
 
 | フィールド | 内容 |
 | --- | --- |
-| `enabled` | `false` を指定すると、プリセットを適用しません |
-| `include` | プリセットを適用するファイル。省略した場合は、すべてのファイルに適用します。空の配列は指定できません |
-| `exclude` | プリセットのみ対象外とするファイル |
-| `rule_sets` | プリセットのルールセットの名前ごとの設定。`false` を指定したルールセットは適用しません |
+| `enabled` | `false` を指定すると、表現のルールを適用しません |
+| `include` | 表現のルールを適用するファイル。省略した場合は、すべてのファイルに適用します。空の配列は指定できません |
+| `exclude` | 表現のルールのみ対象外とするファイル |
+| `rules` | ルールの名前ごとの設定。`true` を指定したルールは適用し、`false` を指定したルールは適用しません。指定しない場合は、`colloquial` と `prefer-hiragana` を適用せず、その他のルールを適用します |
 
 - どのフィールドも、チェック対象のファイルに近い設定ファイルの値を使用します。`include` と `exclude` は、配列全体を置き換えます。
-- 上位のディレクトリの設定ファイルで `enabled = false` または `"比喩" = false` を指定した場合も、下位のディレクトリの設定ファイルで `true` を指定すると、再度適用できます。
-- プリセットの個別のルールを適用しない場合は、[除外のコメント](#除外のコメント)を使用します。
-- プリセットのルールを変更して使用する場合は、該当するルールセットを `jai-smell preset` の出力から `custom-rules.toml` へコピーして変更します。あわせて、プリセットのルールセットに `false` を指定します。
+- 上位のディレクトリの設定ファイルで `false` を指定した `enabled` とルールは、下位のディレクトリの設定ファイルで `true` を指定すると、再度適用できます。
+- ルールの中の個別の表現を適用しない場合は、[除外のコメント](#除外のコメント)を使用します。
+- ルールの内容を変更して使用する場合は、`jai-smell expressions` の出力から、該当するルールセットをコピーします。コピー先は、`rule_files` に指定したファイルです。あわせて、`rules` で元のルールに `false` を指定します。
 
 ### rule_files
 
-追加するルールセットを記述したファイルを指定します。`jai-smell init` が作成する `jai-smell.toml` には、次のように記述されています。
+追加するルールセットを記述したファイルを指定します。
 
 ```toml
 rule_files = ["custom-rules.toml"]
@@ -330,11 +397,11 @@ rule_files = ["custom-rules.toml"]
 - 記述した順序で読み込みます。設定ファイルに直接記述した `rule_sets` は、その後に読み込みます。
 - 指定したファイルには、`rule_sets` のみを記述できます。
 - 複数の設定ファイルが同じファイルを指定した場合は、1 回のみ読み込みます。
-- Claude Code では、スキル `add-custom-rule` で `custom-rules.toml` にルールを追加できます。
+- Claude Code では、スキル `add-custom-rule` でルールを追加できます。スキルは、`~/.config/jai-smell/custom-rules.toml` にルールを登録し、ユーザー全体の設定の `rule_files` にこのファイルを追加します。
 
 ### rule_sets
 
-プリセットに追加する表現を、ルールセットとしてまとめて指定します。設定ファイル、または `rule_files` で指定したファイルに記述します。
+jai-smell が提供する表現のルールに追加する表現を、ルールセットとしてまとめて指定します。設定ファイル、または `rule_files` で指定したファイルに記述します。
 
 ```toml
 [[rule_sets]]
@@ -390,7 +457,12 @@ tokens = [
 
 ### textlint
 
-textlint のルール（`textlint-rule-preset-ja-technical-writing`）の設定を指定します。textlint のルールは、`enabled` に `true` を指定した場合にのみ適用します。文体の好みに依存するルールを含むことと、文章ではない `.txt` のファイルでも検出することが理由です。
+textlint のルールの設定を指定します。使用できるルールは、textlint の次の 2 つのプリセットのルールです。
+
+- `textlint-rule-preset-ja-technical-writing`
+- `@textlint-ja/textlint-rule-preset-ai-writing`
+
+textlint のルールは、`enabled` に `true` を指定した場合にのみ適用します。文体の好みに依存するルールを含むことと、文章ではない `.txt` のファイルでも検出することが理由です。
 
 ```toml
 [textlint]
@@ -408,6 +480,8 @@ include = ["**/*.md", "**/*.txt", "**/*.ts", "**/*.py"]
 sentence-length = { max = 120 }
 no-exclamation-question-mark = false
 no-mix-dearu-desumasu = true
+no-ai-list-formatting = true
+no-ai-hype-expressions = { allows = ["完全に"] }
 ```
 
 | フィールド | 内容 |
@@ -420,9 +494,38 @@ no-mix-dearu-desumasu = true
 - どのフィールドも、チェック対象のファイルに近い設定ファイルの値を使用します。`include` と `exclude` は配列全体を、`rules` のオプションはルールごとにテーブル全体を置き換えます。
 - `include` を記述した場合は、デフォルトの `.md` と `.txt` に代えて使用します。
 - ソースコードを `include` に指定した場合は、コメントに適用します。文末の句点のルール（`ja-no-mixed-period`）は、`rules` に記述した場合にのみ、コメントに適用します。コメントでは、文末の句点を省略する書き方が一般的なためです。
-- `no-mix-dearu-desumasu`（「である」調と「ですます」調の統一）は、`true` またはオプションを指定した場合にのみ適用します。統一する文体は文書によって異なるためです。
-- ルールの名前とオプションは、[textlint-rule-preset-ja-technical-writing の README](https://github.com/textlint-ja/textlint-rule-preset-ja-technical-writing#readme) を参照してください。
+- `no-mix-dearu-desumasu`（「である」調と「ですます」調の混在）は、`true` またはオプションを指定した場合にのみ適用します。`true` を指定した場合は、見出し、本文、箇条書きのそれぞれで、多いほうの文体に統一します（`preferInHeader = ""`、`preferInBody = ""`、`preferInList = ""`）。文体を固定する場合は、オプションに `"である"` または `"ですます"` を指定します。
+- AI が生成した文章に多い記述のルールも、`true` またはオプションを指定した場合にのみ適用します。コードブロックの前のコロンや `- **項目**: 説明` の形式のリストなど、人間が記述した技術文書でも一般的な記述を多く検出するためです。対象は次の 5 件です。
+  - `no-ai-list-formatting`
+  - `no-ai-hype-expressions`
+  - `no-ai-emphasis-patterns`
+  - `ai-tech-writing-guideline`
+  - `no-ai-colon-continuation`
+- `ai-tech-writing-guideline` に `true` を指定した場合は、`enableDocumentAnalysis = false` と `disableConsistencyGuidance = true` を指定して適用します。文書全体の検出件数の集計は、特定の箇所の検出結果ではないため、出力しません。文体の混在は、`no-mix-dearu-desumasu` を有効にした場合にのみ検出します。
+- 同じ箇所を 2 つのルールが検出する場合は、片方の検出結果のみを出力します。`することができます` は、`ja-no-redundant-expression` の検出結果を出力します。文末のコロンは、`no-ai-colon-continuation` の検出結果を出力します。`大幅に改善` などの定量化されていない表現は、`no-ai-hype-expressions` の検出結果を出力します。リスト項目の先頭の絵文字と太字は、`no-ai-list-formatting` の検出結果を出力します。
+- ルールの名前とオプションは、[textlint-rule-preset-ja-technical-writing の README](https://github.com/textlint-ja/textlint-rule-preset-ja-technical-writing#readme) を参照してください。AI が生成した文章に多い記述のルールは、[@textlint-ja/textlint-rule-preset-ai-writing の README](https://github.com/textlint-ja/textlint-rule-preset-ai-writing#readme) を参照してください。ルールの名前は、プリセットの名前を付けずに記述します。
 - 使用できるルールは、バイナリに含まれているものに限られます。textlint の他のルールは追加できません。
+
+### replies
+
+Claude Code が返答を終了した時点で（Stop フック）、返答の本文をチェックします。検出した場合は、終了コード 2 で終了し、Claude に返答の再出力を指示します。
+
+```toml
+[replies]
+# 日本語が含まれない返答を検出し、日本語での再出力を指示する
+japanese = true
+# 返答に、表現のルール、追加のルールセット、textlint のルールを適用する
+check = true
+```
+
+| キー | デフォルト | 内容 |
+| --- | --- | --- |
+| `japanese` | `false` | 本文に英字の単語があり、ひらがな、カタカナ、漢字がない返答を検出します。コードブロックとインラインコードは本文に含めないため、コードのみの返答は検出しません |
+| `check` | `false` | 返答を Markdown として解析し、表現のルール、追加のルールセット、textlint のルールを適用します |
+
+- 設定は、Claude Code の作業ディレクトリから探索した設定ファイルを使用します。`check` で適用するルールは、作業ディレクトリの Markdown のファイル（`reply.md`）に適用される設定と同じです。textlint のルールは、`textlint.enabled` が `true` の場合に適用します。
+- チェックは、返答が表示された後に実行します。検出した場合は、元の返答、検出結果、再出力した返答の順に表示されます。
+- 再出力した返答は、再度チェックしません。検出が続く場合に、返答の終了を妨げないためです。
 
 ## アンインストール
 

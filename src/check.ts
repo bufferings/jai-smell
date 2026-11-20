@@ -1,15 +1,27 @@
 // ファイルと、フックの入力のチェック。
 import { readFileSync, realpathSync } from "node:fs";
-import { extname, resolve } from "node:path";
+import { extname, join, resolve } from "node:path";
 import { extract, fileKind } from "./code.ts";
 import { Config } from "./config.ts";
-import type { Target } from "./hook.ts";
+import type { Reply, Target } from "./hook.ts";
 import { textRanges } from "./markdown.ts";
 import { find, tokenize } from "./matcher.ts";
 import { covers, parse as parseSuppressions } from "./suppress.ts";
 
 export const FILE_HEADING =
   "修正を検討すべき表現の候補を検出しました。チェック対象は今回の編集で追加・変更された部分のみです（行番号はその部分の中での位置を示します）。各箇所を確認し、該当する場合のみ修正してください。";
+
+export const REPLY_NOT_JAPANESE =
+  "返答に日本語が含まれていません。同じ内容を、日本語で再出力してください。";
+
+export const REPLY_HEADING =
+  "返答から、修正を検討すべき表現の候補を検出しました（行番号は返答の中での位置を示します）。各箇所を確認し、該当する箇所を修正した返答の全文を、再出力してください。";
+
+/** 検出結果の出力で、ファイルのパスの位置に出力する名前 */
+export const REPLY_LABEL = "返答";
+
+/** 返答に設定を適用するための、ファイルの名前。返答は Markdown として扱う */
+const REPLY_FILE = "reply.md";
 
 /** 検出結果 */
 type Hit = {
@@ -52,6 +64,39 @@ export async function checkFile(configPath: string | undefined, file: string): P
     (hit) => !covers(suppressions, text, hit.offset, hit.ruleName),
   );
   return toFindings(text, hits);
+}
+
+/**
+ * Claude の返答をチェックする。返答は、作業ディレクトリの Markdown のファイルとして扱い、そのファイルに適用する設定を使用する。
+ * 日本語が含まれない返答は、全体を再出力するため、表現のチェックを行わない
+ */
+export async function checkReply(
+  configPath: string | undefined,
+  { cwd, text }: Reply,
+): Promise<{ notJapanese: boolean; findings: Finding[] }> {
+  const file = join(cwd, REPLY_FILE);
+  const config = configFor(configPath, file);
+  if (config.replies.japanese && lacksJapanese(text)) {
+    return { notJapanese: true, findings: [] };
+  }
+  if (!config.replies.check) {
+    return { notJapanese: false, findings: [] };
+  }
+  return { notJapanese: false, findings: toFindings(text, await findHits(config, file, text)) };
+}
+
+/**
+ * 本文に、英字の単語があり、ひらがな、カタカナ、漢字がない場合に true を返す。
+ * コードブロックとインラインコードは本文に含めないため、コードのみの返答は対象外となる
+ */
+export function lacksJapanese(text: string): boolean {
+  const prose = textRanges(text)
+    .map(({ start, end }) => text.slice(start, end))
+    .join("\n");
+  return (
+    /[A-Za-z]{2,}/.test(prose) &&
+    !/[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u.test(prose)
+  );
 }
 
 /**
@@ -177,7 +222,7 @@ function prepare(
   }
   const extracted = kind.kind === "code" ? extract(text, kind.language) : undefined;
   if (extracted === undefined) {
-    // 言語を判定できないファイルは、ファイル全体をプリセットと追加のルールセットのみでチェックする
+    // 言語を判定できないファイルは、ファイル全体を表現のルールと追加のルールセットのみでチェックする
     return { parts: [whole] };
   }
   const comments: Part[] = extracted.comments.map(({ text, offsets }) => ({
@@ -258,7 +303,7 @@ async function findHits(config: Config, file: string, text: string): Promise<Hit
       });
     }
   }
-  // 安定ソートのため、同じ位置では、プリセット、利用者が追加したルールセット、textlint のルールの順を維持する
+  // 安定ソートのため、同じ位置では、表現のルール、利用者が追加したルールセット、textlint のルールの順を維持する
   return hits.sort((a, b) => a.offset - b.offset);
 }
 

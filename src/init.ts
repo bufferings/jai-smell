@@ -1,12 +1,8 @@
-// `jai-smell init`: ユーザー全体の設定ファイルを作成し、Claude Code のプラグインをインストールする。
+// `jai-smell init`: Claude Code のプラグインをインストールする。
 //
 // Homebrew の formula はインストール時にホームディレクトリへ書き込めないため、利用者がインストール後に実行する。
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { delimiter, dirname, join } from "node:path";
-// 作成するファイル。内容はリポジトリの config/ の同名のファイルと同一
-import customRules from "../config/custom-rules.toml" with { type: "text" };
-import config from "../config/jai-smell.toml" with { type: "text" };
-import { homeFile } from "./config.ts";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { delimiter, join } from "node:path";
 
 const MARKETPLACE = "bufferings/jai-smell";
 const PLUGIN = "jai-smell@jai-smell";
@@ -17,30 +13,7 @@ export function run(): boolean {
   if (!home) {
     throw new Error("HOME が設定されていません");
   }
-  const configFile = homeFile(home);
-  const dir = dirname(configFile);
-  try {
-    mkdirSync(dir, { recursive: true });
-  } catch (error) {
-    throw new Error(`${dir} を作成できません: ${(error as Error).message}`);
-  }
-  // 利用者が記述するファイルは上書きしない
-  createNew(configFile, config as unknown as string);
-  createNew(join(dir, "custom-rules.toml"), customRules as unknown as string);
   return installPlugin(home);
-}
-
-/** すでに存在する場合は上書きしない */
-function createNew(path: string, content: string): void {
-  try {
-    writeFileSync(path, content, { flag: "wx" });
-    console.log(`設定ファイル ${path} を作成しました。`);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
-      throw new Error(`${path} を作成できません: ${(error as Error).message}`);
-    }
-    console.log(`設定ファイル ${path} はすでに存在するため、変更しません。`);
-  }
 }
 
 function installPlugin(home: string): boolean {

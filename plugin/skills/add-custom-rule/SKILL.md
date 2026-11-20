@@ -1,6 +1,6 @@
 ---
 name: add-custom-rule
-description: jai-smell の custom-rules.toml に、検出する表現のルールを登録する。形態素の条件を jai-smell コマンドで実行して検証し、検出すべき例文と検出してはならない例文の両方を確認したうえで、プリセットや登録済みのルールとの重複を避けて追加する。「この表現を jai-smell で検出したい」「jai-smell にルールを追加したい」「この言い回しを禁止したい」と依頼されたときに使用する。
+description: jai-smell の custom-rules.toml に、検出する表現のルールを登録する。形態素の条件を jai-smell コマンドで実行して検証し、検出すべき例文と検出してはならない例文の両方を確認したうえで、jai-smell が提供する表現のルールや、登録済みのルールとの重複を避けて追加する。「この表現を jai-smell で検出したい」「jai-smell にルールを追加したい」「この言い回しを禁止したい」と依頼されたときに使用する。
 ---
 
 # jai-smell のルールの登録
@@ -10,9 +10,11 @@ description: jai-smell の custom-rules.toml に、検出する表現のルー�
 ## 前提
 
 - `jai-smell` コマンドが PATH に存在すること。存在しない場合は、インストールが必要であることを利用者に伝えて終了する。
-- `~/.config/jai-smell/custom-rules.toml` が存在すること。存在しない場合は、`jai-smell init` の実行を利用者に依頼する。
+- 登録先は `~/.config/jai-smell/custom-rules.toml` である。このファイルが存在しない場合は、手順の前に次の 2 つを実行する。
+  - 空の `~/.config/jai-smell/custom-rules.toml` を作成する。
+  - `~/.config/jai-smell/jai-smell.toml` に `rule_files = ["custom-rules.toml"]` を記述する。`jai-smell.toml` が存在しない場合は、この 1 行だけのファイルを作成する。`rule_files` がすでに記述されている場合は、配列に `"custom-rules.toml"` を追加する。
 - 特定のプロジェクトにのみ適用するルールは、そのプロジェクトの `jai-smell.toml` の `rule_sets` に登録する。登録先が依頼から判断できない場合は、`custom-rules.toml` に登録する。
-- プリセットは `jai-smell` のバイナリに含まれるため、変更できない。プリセットの内容は、`jai-smell preset` で出力できる。
+- jai-smell が提供する表現のルールは、`jai-smell` のバイナリに含まれるため、変更できない。内容は、`jai-smell expressions` で出力できる。
 
 ## 手順
 
@@ -29,17 +31,21 @@ description: jai-smell の custom-rules.toml に、検出する表現のルー�
 
 ### 2. 登録済みのルールとの重複を確認する
 
-プリセットと登録済みのルールのみを適用する設定ファイル（`current.toml`）を作成し、検出すべき例文をチェックする。プリセットは、設定ファイルに記述しなくても適用される。`--config` を指定すると、指定した設定ファイルのみが読み込まれるため、利用者の他の設定（textlint のルールなど）は結果に含まれない。
+jai-smell が提供する表現のルールのすべてと、登録済みのルールを適用する設定ファイル（`current.toml`）を作成し、検出すべき例文をチェックする。表現のルールのうち、`colloquial`（話し言葉）と `prefer-hiragana`（漢字をひらく）は、デフォルトでは適用されないため、`true` を指定する。`--config` を指定すると、指定した設定ファイルのみが読み込まれるため、利用者の他の設定（textlint のルールなど）は結果に含まれない。
 
 ```toml
 rule_files = ["~/.config/jai-smell/custom-rules.toml"]
+
+[expressions.rules]
+colloquial = true
+prefer-hiragana = true
 ```
 
 ```sh
 jai-smell --config current.toml positive.txt
 ```
 
-- 対象の表現の位置で検出された場合は、すでに登録されている。登録せず、検出したルールのメッセージを利用者に報告する。
+- 対象の表現の位置で検出された場合は、すでに登録されている。登録せず、検出したルールのメッセージを利用者に報告する。検出したルールが `colloquial` または `prefer-hiragana` の表現で、利用者の設定で適用されていない場合は、設定で有効にする方法（スキル `configure`）を案内する。
 - 一部の例文のみが検出された場合は、登録済みのルールの条件と、検出されなかった例文との差を報告し、登録するルールの範囲を利用者に確認する。
 
 ### 3. 形態素の分割を確認する
@@ -54,10 +60,10 @@ jai-smell --config "${CLAUDE_SKILL_DIR}/probe.toml" positive.txt negative.txt
 
 ### 4. 条件を記述して検証する
 
-候補のルールのみを記述した設定ファイル（`candidate.toml`）を作成する。プリセットの検出結果を含めないように、`preset.enabled` に `false` を指定する。
+候補のルールのみを記述した設定ファイル（`candidate.toml`）を作成する。jai-smell が提供する表現のルールの検出結果を含めないように、`expressions.enabled` に `false` を指定する。
 
 ```toml
-[preset]
+[expressions]
 enabled = false
 
 [[rule_sets]]

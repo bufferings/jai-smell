@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CONFIG, REPOSITORY, RULE_FILES, run, Workspace } from "./helpers.ts";
+import { REPOSITORY, run, Workspace } from "./helpers.ts";
 
 const read = (path: string) => readFileSync(join(REPOSITORY, path), "utf8");
 const readJson = (path: string) => JSON.parse(read(path));
@@ -18,9 +18,10 @@ test("マーケットプレイスのプラグインの名前は、init がイン
   expect(plugin.version).toBe(readJson("package.json").version);
 });
 
-test("フックは、ファイルの編集の後にのみ check.sh を実行する", () => {
+test("フックは、ファイルの編集の後と、返答の終了時に check.sh を実行する", () => {
   const hooks = readJson("plugin/hooks/hooks.json");
-  expect(Object.keys(hooks.hooks)).toEqual(["PostToolUse"]);
+  expect(Object.keys(hooks.hooks)).toEqual(["PostToolUse", "Stop"]);
+  expect(hooks.hooks.Stop[0].hooks[0].command).toBe('"${CLAUDE_PLUGIN_ROOT}"/hooks/check.sh');
   const postToolUse = hooks.hooks.PostToolUse[0];
   expect(postToolUse.matcher).toBe("Edit|Write|MultiEdit");
   expect(postToolUse.hooks[0].command).toBe('"${CLAUDE_PLUGIN_ROOT}"/hooks/check.sh');
@@ -41,14 +42,14 @@ test("出力スタイルは、Claude Code の組み込みの指示を保持し�
 });
 
 test("スキルの名前は、ディレクトリの名前と一致する", () => {
-  for (const name of ["japanese-tech-writing", "add-custom-rule"]) {
+  for (const name of ["japanese-tech-writing", "add-custom-rule", "configure"]) {
     expect(frontMatter(`plugin/skills/${name}/SKILL.md`)).toContain(`name: ${name}`);
   }
 });
 
 test("add-custom-rule スキルの probe.toml は、形態素ごとに分割位置と品詞のみを出力する", () => {
   const workspace = new Workspace("probe");
-  // プリセットが適用されていれば、「走る」も検出される
+  // 表現のルールが適用されていれば、「走る」も検出される
   workspace.write("example.txt", "正典が走る。\n");
   const output = run(
     ["--config", join(REPOSITORY, "plugin/skills/add-custom-rule/probe.toml"), "example.txt"],
@@ -68,11 +69,7 @@ test("add-custom-rule スキルの probe.toml は、形態素ごとに分割位�
 function check(withCommand: boolean) {
   const home = join(tmpdir(), `jai-smell-plugin-${process.pid}-${withCommand}`);
   rmSync(home, { recursive: true, force: true });
-  const configDir = join(home, ".config/jai-smell");
-  mkdirSync(configDir, { recursive: true });
-  for (const source of [CONFIG, ...RULE_FILES]) {
-    writeFileSync(join(configDir, source.slice(source.lastIndexOf("/") + 1)), readFileSync(source));
-  }
+  mkdirSync(home, { recursive: true });
   const dirs = ["/usr/bin", "/bin"];
   if (withCommand) {
     // テストではバイナリの代わりに、ソースコードを実行するスクリプトを jai-smell として配置する

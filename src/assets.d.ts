@@ -9,3 +9,8 @@ declare module "textlint-rule-preset-ja-technical-writing" {
   const preset: unknown;
   export default preset;
 }
+
+declare module "@textlint-ja/textlint-rule-preset-ai-writing" {
+  const preset: unknown;
+  export default preset;
+}
