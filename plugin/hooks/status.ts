@@ -1,10 +1,9 @@
 // jai-smell の Claude Code プラグインの Mod（hooks.json の modules）。
-// チェックを実行していない状態を、プロンプトの下のステータスに表示する。対象は次の 2 つである。
-// - /jai-smell-off で、このセッションのチェックを停止している
-// - 設定を読み込めない。フックは、チェックを実行せずに終了する
+// - /jai-smell-off と /jai-smell-on で、このセッションのチェックを停止、再開する
+// - /jai-smell-status で、チェックの状態を表示する
+// - 設定を読み込めない間は、プロンプトの下のステータスに表示する。フックは、チェックを実行せずに終了する
 import type { EngineInterface, Register } from "claude-code";
 
-const OFF = "off（/jai-smell-on で再開）";
 const CONFIG_FAILED = "設定を読み込めません。/jai-smell:configure で修正してください";
 
 /** 返答に適用する設定の探索に、フックが使用するファイルの名前 */
@@ -19,12 +18,20 @@ const state = {
   fileFails: false,
 };
 
+/** 停止している間は表示しない。利用者が停止したためである。状態は /jai-smell-status で確認できる */
 function show($: EngineInterface): void {
+  const failed = !state.off && (state.sessionFails || state.fileFails);
+  $.ui.status(failed ? CONFIG_FAILED : undefined);
+}
+
+function describe(): string {
   if (state.off) {
-    $.ui.status(OFF);
-  } else {
-    $.ui.status(state.sessionFails || state.fileFails ? CONFIG_FAILED : undefined);
+    return "このセッションのチェックを停止しています。/jai-smell-on で再開できます。";
   }
+  if (state.sessionFails || state.fileFails) {
+    return `チェックを実行していません。${CONFIG_FAILED}。`;
+  }
+  return "チェックは有効です。";
 }
 
 /**
@@ -60,6 +67,10 @@ export const register: Register = (on) => {
       name: "jai-smell-on",
       description: "このセッションの jai-smell のチェックを再開する",
     });
+    await $.command.register({
+      name: "jai-smell-status",
+      description: "jai-smell のチェックの状態を表示する",
+    });
     const started = await next(e);
     state.off = await $.fs.exists(await offFile($));
     state.sessionFails = await configFails($, `${e.cwd}/${REPLY_FILE}`);
@@ -79,6 +90,12 @@ export const register: Register = (on) => {
     state.off = false;
     show($);
     return { text: "チェックを再開しました。" };
+  });
+
+  on("command.run", { command: "jai-smell-status" }, async ($) => {
+    state.sessionFails = await configFails($, `${await $.session.cwd()}/${REPLY_FILE}`);
+    show($);
+    return { text: describe() };
   });
 
   // 停止は、セッションの中だけで有効とする

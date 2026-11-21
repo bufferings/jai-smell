@@ -65,11 +65,12 @@ test("add-custom-rule スキルの probe.toml は、形態素ごとに分割位�
   ]);
 });
 
-test("Mod は、チェックを停止するコマンドと再開するコマンドを登録する", () => {
+test("Mod は、チェックを停止、再開するコマンドと、状態を表示するコマンドを登録する", () => {
   expect(readJson("plugin/hooks/hooks.json").modules).toEqual(["./status.ts"]);
   const mod = read("plugin/hooks/status.ts");
   expect(mod).toContain('name: "jai-smell-off"');
   expect(mod).toContain('name: "jai-smell-on"');
+  expect(mod).toContain('name: "jai-smell-status"');
   // check.sh が確認するファイルと、同じパスを使用する
   expect(mod).toContain("${env.CLAUDE_PLUGIN_DATA}/off/${env.CLAUDE_CODE_SESSION_ID}");
   expect(read("plugin/hooks/check.sh")).toContain(
