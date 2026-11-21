@@ -18,9 +18,12 @@ test("マーケットプレイスのプラグインの名前は、setup がイ�
   expect(plugin.version).toBe(readJson("package.json").version);
 });
 
-test("フックは、ファイルの編集の後と、返答の終了時に check.sh を実行する", () => {
+test("フックは、セッションの開始時、ファイルの編集の後、返答の終了時に check.sh を実行する", () => {
   const hooks = readJson("plugin/hooks/hooks.json");
-  expect(Object.keys(hooks.hooks)).toEqual(["PostToolUse", "Stop"]);
+  expect(Object.keys(hooks.hooks)).toEqual(["SessionStart", "PostToolUse", "Stop"]);
+  const sessionStart = hooks.hooks.SessionStart[0];
+  expect(sessionStart.matcher).toBe("startup|resume");
+  expect(sessionStart.hooks[0].command).toBe('"${CLAUDE_PLUGIN_ROOT}"/hooks/check.sh');
   expect(hooks.hooks.Stop[0].hooks[0].command).toBe('"${CLAUDE_PLUGIN_ROOT}"/hooks/check.sh');
   const postToolUse = hooks.hooks.PostToolUse[0];
   expect(postToolUse.matcher).toBe("Edit|Write|MultiEdit");

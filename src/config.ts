@@ -27,9 +27,12 @@ const PROJECT_FILE = "jai-smell.toml";
 const HOME_FILE = ".config/jai-smell/jai-smell.toml";
 const HOME_REQUIRED = "~/ から始まるパスを指定するには、HOME の設定が必要です";
 
+/** 設定ファイルの修正の方法 */
+export const CONFIGURE_HINT =
+  'claude "/jai-smell:configure" を実行すると、設定ファイルを修正できます';
+
 /** preset を記述した設定ファイルに、修正の方法を示す。不明なフィールドのエラーでは、修正の方法を特定できないためである */
-const PRESET_RENAMED =
-  'preset は使用できません。claude "/jai-smell:configure" を実行すると、設定ファイルを修正できます';
+const PRESET_RENAMED = `preset は使用できません。${CONFIGURE_HINT}`;
 
 /** textlint のルールを有効にした場合の、適用するファイルのデフォルト。ルールは文章を対象としているためである */
 const TEXTLINT_INCLUDE = ["**/*.md", "**/*.txt"];

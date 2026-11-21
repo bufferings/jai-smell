@@ -4,6 +4,7 @@ import packageJson from "../package.json" with { type: "json" };
 import {
   CONFIG_FAILED,
   ConfigError,
+  checkConfig,
   checkFile,
   checkWritten,
   configFor,
@@ -12,16 +13,19 @@ import {
   REPLY_NOT_JAPANESE,
   replyLacksJapanese,
 } from "./check.ts";
-import { reply, target } from "./hook.ts";
+import { CONFIGURE_HINT } from "./config.ts";
+import { eventName, reply, sessionStart, target } from "./hook.ts";
 
 const USAGE = `使い方:
   jai-smell [--config <path>] <files...>
       ファイル全体をチェックし、検出結果を path:line:col: message の形式で出力する。検出した場合は exit 1
   jai-smell hook [--config <path>]
       Claude Code のフックの JSON を stdin から読み込む。検出した場合は結果を stderr に出力して exit 2
-      設定を読み込めない場合は、エラーメッセージを stderr に出力して exit 2
       PostToolUse フックでは、今回の編集で追加・変更された部分をチェックする。
-      Stop フックでは、設定ファイルの replies で有効にした場合に、Claude の返答をチェックする
+      Stop フックでは、設定ファイルの replies で有効にした場合に、Claude の返答をチェックする。
+      SessionStart フックでは、設定を読み込めることを確認する。
+      設定を読み込めない場合は、SessionStart フックと PostToolUse フックで、エラーメッセージを
+      systemMessage として stdout に出力する
   jai-smell config [--config <path>] <file>
       ファイルに適用する設定（読み込んだ設定ファイルと、適用するルール）を出力する
   jai-smell expressions
@@ -154,22 +158,33 @@ async function runFiles(config: string | undefined, files: string[]): Promise<nu
 
 /**
  * 検出した場合は、exit 2 と stderr で Claude にフィードバックする。
- * 設定を読み込めない場合も、同じ方法で Claude に通知する。exit 1 は Claude に通知されず、チェックを実行していないことを利用者が確認できないためである
+ * 設定を読み込めない場合は、systemMessage で利用者に表示する。Claude には通知しない。Claude への通知は、
+ * 設定ファイルを修正するまで、返答のたびに Claude の処理を追加するためである。
+ * Stop フックでは表示しない。SessionStart フックと PostToolUse フックで表示するためである
  */
 async function runHook(config: string | undefined): Promise<number> {
+  const input = await Bun.stdin.text();
   try {
-    return await checkHookInput(config);
+    return await checkHookInput(config, input);
   } catch (error) {
     if (!(error instanceof ConfigError)) {
       throw error;
     }
-    console.error(`${CONFIG_FAILED}\n${error.message}`);
-    return 2;
+    if (eventName(input) !== "Stop") {
+      // 1 行で表示されるよう、改行を含めない
+      const hint = error.message.includes(CONFIGURE_HINT) ? "" : `。${CONFIGURE_HINT}`;
+      console.log(JSON.stringify({ systemMessage: `${CONFIG_FAILED}${error.message}${hint}` }));
+    }
+    return 0;
   }
 }
 
-async function checkHookInput(config: string | undefined): Promise<number> {
-  const input = await Bun.stdin.text();
+async function checkHookInput(config: string | undefined, input: string): Promise<number> {
+  const cwd = sessionStart(input);
+  if (cwd !== undefined) {
+    checkConfig(config, cwd);
+    return 0;
+  }
   const replied = reply(input);
   if (replied !== undefined) {
     if (!replyLacksJapanese(config, replied)) {
@@ -210,7 +225,7 @@ async function main(): Promise<number> {
     return 0;
   }
   const { mode, config } = args;
-  // exit 2 は Claude へのフィードバックとして扱われるため、設定の読み込みを除くフックの失敗は exit 1 とする
+  // exit 2 は Claude へのフィードバックとして扱われるため、フックの失敗は exit 1 とする
   const failure = mode.kind === "files" ? 2 : 1;
   try {
     switch (mode.kind) {

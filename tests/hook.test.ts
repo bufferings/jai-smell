@@ -105,16 +105,36 @@ test("replies.japanese を有効にした場合は、大部分が英語の返答
   expect(stopHook("stop-japanese-ok", config, "ビルドは成功しました。").code).toBe(0);
 });
 
-test("設定を読み込めない場合は、チェックを実行していないことを exit 2 で Claude に通知する", () => {
-  for (const [name, config, message] of [
-    ["stop-unknown", "[replies]\nenglish = true\n", "english"],
-    ["stop-type", '[replies]\njapanese = "yes"\n', "japanese には、true または false"],
-    ["stop-preset", "[preset]\nenabled = false\n", "preset は使用できません"],
-  ] as const) {
-    const output = stopHook(name, config, "返答です。");
-    expect(output.code).toBe(2);
-    expect(output.stderr).toContain("チェックを実行していません");
-    expect(output.stderr).toContain('claude "/jai-smell:configure"');
-    expect(output.stderr).toContain(message);
+const INVALID_CONFIGS = [
+  ["unknown", "[replies]\nenglish = true\n", "english"],
+  ["type", '[replies]\njapanese = "yes"\n', "japanese には、true または false"],
+  ["preset", "[preset]\nenabled = false\n", "preset は使用できません"],
+] as const;
+
+test("Stop フックは、設定を読み込めない場合に、何も出力しない", () => {
+  for (const [name, config] of INVALID_CONFIGS) {
+    const output = stopHook(`stop-${name}`, config, "The build succeeded.");
+    expect(output).toEqual({ code: 0, stdout: "", stderr: "" });
   }
+});
+
+test("SessionStart フックは、設定を読み込めない場合に、systemMessage で利用者に表示する", () => {
+  for (const [name, config, message] of INVALID_CONFIGS) {
+    const workspace = new Workspace(`start-${name}`);
+    workspace.write("work/jai-smell.toml", config);
+    const output = workspace.hook({ hook_event_name: "SessionStart", cwd: workspace.path("work") });
+    expect(output.code).toBe(0);
+    expect(output.stderr).toBe("");
+    const { systemMessage } = JSON.parse(output.stdout);
+    expect(systemMessage).toContain("チェックを実行していません");
+    expect(systemMessage).toContain(message);
+    expect(systemMessage.split('claude "/jai-smell:configure"')).toHaveLength(2);
+  }
+});
+
+test("SessionStart フックは、設定を読み込める場合に、何も出力しない", () => {
+  const workspace = new Workspace("start-valid");
+  workspace.write("work/jai-smell.toml", "[replies]\njapanese = true\n");
+  const output = workspace.hook({ hook_event_name: "SessionStart", cwd: workspace.path("work") });
+  expect(output).toEqual({ code: 0, stdout: "", stderr: "" });
 });
