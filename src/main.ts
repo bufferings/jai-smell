@@ -2,9 +2,7 @@
 // ビルド時に、バイナリに組み込まれる
 import packageJson from "../package.json" with { type: "json" };
 import {
-  CONFIG_FAILED,
   ConfigError,
-  checkConfig,
   checkFile,
   checkWritten,
   configFor,
@@ -13,8 +11,7 @@ import {
   REPLY_NOT_JAPANESE,
   replyLacksJapanese,
 } from "./check.ts";
-import { CONFIGURE_HINT } from "./config.ts";
-import { eventName, reply, sessionStart, target } from "./hook.ts";
+import { reply, target } from "./hook.ts";
 
 const USAGE = `使い方:
   jai-smell [--config <path>] <files...>
@@ -23,9 +20,7 @@ const USAGE = `使い方:
       Claude Code のフックの JSON を stdin から読み込む。検出した場合は結果を stderr に出力して exit 2
       PostToolUse フックでは、今回の編集で追加・変更された部分をチェックする。
       Stop フックでは、設定ファイルの replies で有効にした場合に、Claude の返答をチェックする。
-      SessionStart フックでは、設定を読み込めることを確認する。
-      設定を読み込めない場合は、SessionStart フックと PostToolUse フックで、エラーメッセージを
-      systemMessage として stdout に出力する
+      設定を読み込めない場合は、チェックを実行せずに exit 0
   jai-smell config [--config <path>] <file>
       ファイルに適用する設定（読み込んだ設定ファイルと、適用するルール）を出力する
   jai-smell expressions
@@ -158,33 +153,22 @@ async function runFiles(config: string | undefined, files: string[]): Promise<nu
 
 /**
  * 検出した場合は、exit 2 と stderr で Claude にフィードバックする。
- * 設定を読み込めない場合は、systemMessage で利用者に表示する。Claude には通知しない。Claude への通知は、
- * 設定ファイルを修正するまで、返答のたびに Claude の処理を追加するためである。
- * Stop フックでは表示しない。SessionStart フックと PostToolUse フックで表示するためである
+ * 設定を読み込めない場合は、チェックを実行せずに終了する。Claude への通知は、設定ファイルを修正するまで、
+ * 返答のたびに Claude の処理を追加するためである。利用者には、プラグインの Mod がステータスで表示する
  */
 async function runHook(config: string | undefined): Promise<number> {
-  const input = await Bun.stdin.text();
   try {
-    return await checkHookInput(config, input);
+    return await checkHookInput(config);
   } catch (error) {
     if (!(error instanceof ConfigError)) {
       throw error;
-    }
-    if (eventName(input) !== "Stop") {
-      // 1 行で表示されるよう、改行を含めない
-      const hint = error.message.includes(CONFIGURE_HINT) ? "" : `。${CONFIGURE_HINT}`;
-      console.log(JSON.stringify({ systemMessage: `${CONFIG_FAILED}${error.message}${hint}` }));
     }
     return 0;
   }
 }
 
-async function checkHookInput(config: string | undefined, input: string): Promise<number> {
-  const cwd = sessionStart(input);
-  if (cwd !== undefined) {
-    checkConfig(config, cwd);
-    return 0;
-  }
+async function checkHookInput(config: string | undefined): Promise<number> {
+  const input = await Bun.stdin.text();
   const replied = reply(input);
   if (replied !== undefined) {
     if (!replyLacksJapanese(config, replied)) {

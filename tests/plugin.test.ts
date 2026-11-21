@@ -18,12 +18,9 @@ test("マーケットプレイスのプラグインの名前は、setup がイ�
   expect(plugin.version).toBe(readJson("package.json").version);
 });
 
-test("フックは、セッションの開始時、ファイルの編集の後、返答の終了時に check.sh を実行する", () => {
+test("フックは、ファイルの編集の後と、返答の終了時に check.sh を実行する", () => {
   const hooks = readJson("plugin/hooks/hooks.json");
-  expect(Object.keys(hooks.hooks)).toEqual(["SessionStart", "PostToolUse", "Stop"]);
-  const sessionStart = hooks.hooks.SessionStart[0];
-  expect(sessionStart.matcher).toBe("startup|resume");
-  expect(sessionStart.hooks[0].command).toBe('"${CLAUDE_PLUGIN_ROOT}"/hooks/check.sh');
+  expect(Object.keys(hooks.hooks)).toEqual(["PostToolUse", "Stop"]);
   expect(hooks.hooks.Stop[0].hooks[0].command).toBe('"${CLAUDE_PLUGIN_ROOT}"/hooks/check.sh');
   const postToolUse = hooks.hooks.PostToolUse[0];
   expect(postToolUse.matcher).toBe("Edit|Write|MultiEdit");
@@ -68,9 +65,21 @@ test("add-custom-rule スキルの probe.toml は、形態素ごとに分割位�
   ]);
 });
 
-/** PATH に jai-smell を含めるかどうかを指定して、check.sh を実行する */
-function check(withCommand: boolean) {
-  const home = join(tmpdir(), `jai-smell-plugin-${process.pid}-${withCommand}`);
+test("Mod は、チェックを停止するコマンドと再開するコマンドを登録する", () => {
+  expect(readJson("plugin/hooks/hooks.json").modules).toEqual(["./status.ts"]);
+  const mod = read("plugin/hooks/status.ts");
+  expect(mod).toContain('name: "jai-smell-off"');
+  expect(mod).toContain('name: "jai-smell-on"');
+  // check.sh が確認するファイルと、同じパスを使用する
+  expect(mod).toContain("${env.CLAUDE_PLUGIN_DATA}/off/${env.CLAUDE_CODE_SESSION_ID}");
+  expect(read("plugin/hooks/check.sh")).toContain(
+    "$CLAUDE_PLUGIN_DATA/off/$CLAUDE_CODE_SESSION_ID",
+  );
+});
+
+/** PATH に jai-smell を含めるかどうかと、チェックを停止しているかどうかを指定して、check.sh を実行する */
+function check(withCommand: boolean, off = false) {
+  const home = join(tmpdir(), `jai-smell-plugin-${process.pid}-${withCommand}-${off}`);
   rmSync(home, { recursive: true, force: true });
   mkdirSync(home, { recursive: true });
   const dirs = ["/usr/bin", "/bin"];
@@ -89,8 +98,20 @@ function check(withCommand: boolean) {
     tool_name: "Edit",
     tool_input: { file_path: join(home, "doc.md"), old_string: "x", new_string: "CI が走る。" },
   };
+  // Claude Code がフックに設定する環境変数
+  const data = join(home, "data");
+  const session = "00000000-0000-4000-8000-000000000000";
+  if (off) {
+    mkdirSync(join(data, "off"), { recursive: true });
+    writeFileSync(join(data, "off", session), "");
+  }
   const result = Bun.spawnSync([join(REPOSITORY, "plugin/hooks/check.sh")], {
-    env: { HOME: home, PATH: dirs.join(":") },
+    env: {
+      HOME: home,
+      PATH: dirs.join(":"),
+      CLAUDE_PLUGIN_DATA: data,
+      CLAUDE_CODE_SESSION_ID: session,
+    },
     stdin: Buffer.from(JSON.stringify(input)),
   });
   return { code: result.exitCode, stderr: result.stderr.toString() };
@@ -104,6 +125,12 @@ test("check.sh は、jai-smell の終了コードと出力を変更せずに返�
 
 test("check.sh は、jai-smell が PATH に存在しない場合は何も実行しない", () => {
   const output = check(false);
+  expect(output.code).toBe(0);
+  expect(output.stderr).toBe("");
+});
+
+test("check.sh は、セッションのチェックを停止している場合は何も実行しない", () => {
+  const output = check(true, true);
   expect(output.code).toBe(0);
   expect(output.stderr).toBe("");
 });

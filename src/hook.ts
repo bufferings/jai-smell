@@ -1,6 +1,5 @@
 // Claude Code のフックの入力（JSON）から、チェックの対象を抽出する。
 // PostToolUse フックでは、今回の編集で追加・変更された部分を、Stop フックでは、Claude の返答を対象とする。
-// SessionStart フックでは、設定を読み込めることだけを確認する。
 
 /** ファイルの編集で追加・変更された部分。MultiEdit では編集ごとに分かれる */
 export type Target = {
@@ -39,21 +38,6 @@ export function reply(input: string): Reply | undefined {
     return undefined;
   }
   return { cwd: typeof parsed.cwd === "string" ? parsed.cwd : process.cwd(), text: message };
-}
-
-/** フックのイベントの名前。入力に含まれない場合は undefined を返す */
-export function eventName(input: string): string | undefined {
-  const name = parse(input)?.hook_event_name;
-  return typeof name === "string" ? name : undefined;
-}
-
-/** SessionStart フックの入力から、セッションの作業ディレクトリを抽出する。SessionStart フックの入力ではない場合は undefined を返す */
-export function sessionStart(input: string): string | undefined {
-  const parsed = parse(input);
-  if (parsed?.hook_event_name !== "SessionStart") {
-    return undefined;
-  }
-  return typeof parsed.cwd === "string" ? parsed.cwd : process.cwd();
 }
 
 /** 追加・変更された部分がない場合は undefined を返す */

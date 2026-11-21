@@ -11,16 +11,13 @@ import { covers, parse as parseSuppressions } from "./suppress.ts";
 export const FILE_HEADING =
   "修正を検討すべき表現の候補を検出しました。チェック対象は今回の編集で追加・変更された部分のみです（行番号はその部分の中での位置を示します）。各箇所を確認し、該当する場合のみ修正してください。";
 
-/** 設定を読み込めない場合に、フックが利用者に表示する内容。エラーメッセージを続けて出力する */
-export const CONFIG_FAILED = "jai-smell の設定を読み込めないため、チェックを実行していません。";
-
 /** 設定を読み込めない場合のエラー。利用者が設定ファイルを修正するまで、チェックを実行できない */
 export class ConfigError extends Error {}
 
 export const REPLY_NOT_JAPANESE =
   "返答の大部分が日本語ではありません。同じ内容を、日本語で再出力してください。英語の文章の作成を依頼された場合など、英語が正しい箇所は、変更せずに出力してください。";
 
-/** cwd に適用する設定を探索するための、ファイルの名前 */
+/** 返答に適用する設定を探索するための、ファイルの名前 */
 const REPLY_FILE = "reply.md";
 
 /** 検出結果 */
@@ -52,11 +49,6 @@ export function configFor(configPath: string | undefined, file: string): Config 
     }
   }
   return config;
-}
-
-/** cwd のファイルに適用する設定を読み込めることを確認する。読み込めない場合は ConfigError を送出する */
-export function checkConfig(configPath: string | undefined, cwd: string): void {
-  configFor(configPath, join(cwd, REPLY_FILE));
 }
 
 /** 出力済みの警告。複数のファイルをチェックする場合に、同じ警告を重複して出力しない */

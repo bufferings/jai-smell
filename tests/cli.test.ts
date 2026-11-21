@@ -368,17 +368,11 @@ test("フック: フックの入力を解析できない場合は、Claude の�
   expect(hook("not json").code).toBe(1);
 });
 
-test("フック: 設定を読み込めない場合は、チェックを実行していないことを systemMessage で利用者に表示する", () => {
+test("フック: 設定を読み込めない場合は、チェックを実行せず、何も出力しない", () => {
   const workspace = new Workspace("hook-invalid");
   workspace.write("work/jai-smell.toml", "unknown = 1");
   const output = workspace.hook(edit(workspace.path("work/doc.md"), "CI が走る。"));
-  expect(output.code).toBe(0);
-  expect(output.stderr).toBe("");
-  const { systemMessage } = JSON.parse(output.stdout);
-  expect(systemMessage).toContain("チェックを実行していません");
-  expect(systemMessage).toContain("unknown");
-  expect(systemMessage).toContain('claude "/jai-smell:configure"');
-  expect(systemMessage).not.toContain("走る");
+  expect(output).toEqual({ code: 0, stdout: "", stderr: "" });
 });
 
 test("表現のルールは、修正前の文章のすべての行を検出する", () => {
