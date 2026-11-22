@@ -4,7 +4,7 @@
 //
 // textlint のコマンドは、設定ファイルに記述された名前からルールのパッケージを実行時に読み込む。
 // バイナリにはビルド時に参照が確定したコードのみが含まれるため、ルールを明示的にインポートして kernel に指定する。
-import "./kuromoji-dict.ts";
+import "./kuromojin-dict.ts";
 import { TextlintKernel } from "@textlint/kernel";
 import markdownPlugin from "@textlint/textlint-plugin-markdown";
 import textPlugin from "@textlint/textlint-plugin-text";

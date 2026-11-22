@@ -71,12 +71,24 @@ for (let item = queue.shift(); item; item = queue.shift()) {
   }
 }
 
+// パッケージの最上位のディレクトリ以外に配置されている、ライセンスと NOTICE のファイル。
+// kuromojin は、形態素解析の実装の派生元（Apache-2.0）と、辞書（IPADIC）の表記を、それぞれのディレクトリに配置している。
+const NESTED_FILES: Record<string, string[]> = {
+  kuromojin: ["src/analyzer/NOTICE.md", "src/analyzer/LICENSE-2.0.txt", "dict/NOTICE.md"],
+};
+
 const sections = [...packages.entries()]
   .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
   .map(([key, { dir, manifest }]) => {
     const files = readdirSync(dir)
       .filter((file) => /^(licen[sc]e|notice|copying)/i.test(file))
       .sort();
+    for (const file of NESTED_FILES[manifest.name] ?? []) {
+      if (!existsSync(join(dir, file))) {
+        throw new Error(`${key} に ${file} がありません。NESTED_FILES を確認してください。`);
+      }
+      files.push(file);
+    }
     const license =
       typeof manifest.license === "string" ? manifest.license : JSON.stringify(manifest.license);
     const texts = files.map((file) =>

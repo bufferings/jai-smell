@@ -42,8 +42,8 @@ GNU Library General Public License version 2
 IPADIC (mecab-ipadic), embedded in the jai-smell binary
 ===========================================================================
 
-The dictionary is distributed with the kuromoji package. Its copyright
-notice and license are included in the kuromoji section below.
+The dictionary is distributed with the kuromojin package. Its copyright
+notice and license are included in the kuromojin section below.
 
 ===========================================================================
 p1ass/textlint-rule-preset-ai-words-ja

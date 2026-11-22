@@ -1,6 +1,6 @@
 // 形態素解析と、形態素の並びと entries の比較。
-import "./kuromoji-dict.ts";
-import { tokenize as kuromojiTokenize } from "kuromojin";
+import "./kuromojin-dict.ts";
+import { tokenize as kuromojinTokenize } from "kuromojin";
 import { type Entry, TOKEN_FIELDS, type TokenField, type TokenPattern } from "./dictionary.ts";
 
 /** 1 つの形態素。フィールド名は entries の条件と同一 */
@@ -16,7 +16,7 @@ export type Token = Record<TokenField, string> & {
 export async function tokenize(text: string): Promise<Token[]> {
   const offsets = codePointOffsets(text);
   const tokens: Token[] = [];
-  for (const token of await kuromojiTokenize(text)) {
+  for (const token of await kuromojinTokenize(text)) {
     if (token.surface_form.trim() === "") {
       continue;
     }

@@ -1,6 +1,6 @@
 // 検出する表現（設定ファイルの entries）の定義と検証。
 
-/** 条件に指定できるフィールド。IPADIC の項目で、フィールド名は kuromoji に準拠している */
+/** 条件に指定できるフィールド。IPADIC の項目で、フィールド名は kuromojin に準拠している */
 export const TOKEN_FIELDS = [
   "surface_form",
   "pos",
