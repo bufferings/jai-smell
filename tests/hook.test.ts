@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { lacksJapanese } from "../src/check.ts";
-import { reply, target } from "../src/hook.ts";
+import { reply, target, writtenContext } from "../src/hook.ts";
 import { Workspace } from "./helpers.ts";
 
 const text = (input: string) => target(input)?.parts.join("\n\n");
@@ -94,15 +94,36 @@ function stopHook(name: string, config: string | undefined, message: string) {
 }
 
 test("返答のチェックは、設定で有効にした場合にのみ適用する", () => {
-  expect(stopHook("stop-default", undefined, "The build succeeded.").code).toBe(0);
+  expect(stopHook("stop-default", undefined, "The build succeeded.")).toEqual({
+    code: 0,
+    stdout: "",
+    stderr: "",
+  });
 });
 
 test("replies.japanese を有効にした場合は、大部分が英語の返答を検出する", () => {
   const config = "[replies]\njapanese = true\n";
   const output = stopHook("stop-japanese", config, "The build succeeded.");
-  expect(output.code).toBe(2);
-  expect(output.stderr).toContain("日本語で再出力してください");
-  expect(stopHook("stop-japanese-ok", config, "ビルドは成功しました。").code).toBe(0);
+  expect(output.code).toBe(0);
+  expect(output.stderr).toBe("");
+  const json = JSON.parse(output.stdout);
+  expect(json.decision).toBe("block");
+  expect(json.reason).toContain("日本語で再出力してください");
+  expect(stopHook("stop-japanese-ok", config, "ビルドは成功しました。")).toEqual({
+    code: 0,
+    stdout: "",
+    stderr: "",
+  });
+});
+
+test("additionalContext は、上限に収まる件数の検出結果を出力する", () => {
+  const lines = Array.from({ length: 100 }, (_, i) => `doc.md:${i + 1}:1: ${"あ".repeat(190)}`);
+  const context: string = JSON.parse(writtenContext(lines)).hookSpecificOutput.additionalContext;
+  expect(context.length).toBeLessThanOrEqual(10000);
+  const shown = context.split("\n").filter((line) => line.startsWith("doc.md:")).length;
+  expect(shown).toBeLessThan(100);
+  expect(context).toContain("修正の候補となる表現を 100 件検出しました。");
+  expect(context).toEndWith(`残りの ${100 - shown} 件は、出力の上限のため省略しました。`);
 });
 
 test("Stop フックは、設定を読み込めない場合に、何も出力しない", () => {

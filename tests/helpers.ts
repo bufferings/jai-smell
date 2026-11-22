@@ -99,3 +99,8 @@ export const hook = (input: unknown, config: string = RULES_ONLY): Output =>
   run(["hook", "--config", config], {
     stdin: typeof input === "string" ? input : JSON.stringify(input),
   });
+
+/** フックの出力（JSON）から、Claude に渡す検出結果（additionalContext）を抽出する。出力がない場合は空文字列を返す */
+export function context(output: Output): string {
+  return output.stdout === "" ? "" : JSON.parse(output.stdout).hookSpecificOutput.additionalContext;
+}

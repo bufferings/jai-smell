@@ -1,7 +1,7 @@
 // textlint のルールの適用を検証する。
 import { expect, test } from "bun:test";
 import { RULE_NAMES, resolveRules } from "../src/textlint.ts";
-import { edit, textlintFindings, Workspace, withPath, write } from "./helpers.ts";
+import { context, edit, textlintFindings, Workspace, withPath, write } from "./helpers.ts";
 
 /** 読点の数（max-ten）と二重否定（no-double-negative-ja）で検出される文章 */
 const TEXT = "これは、長い、文で、読点が、多い、文です。\n\n確認できないわけではない。\n";
@@ -282,11 +282,11 @@ test("フック: 追加・変更された部分に、ルールを適用する", 
   const workspace = new Workspace("textlint-hook").withHomeConfig();
   workspace.write("work/jai-smell.toml", ENABLED);
   let output = workspace.hook(write(workspace.path("work/doc.md"), TEXT));
-  expect(output.code).toBe(2);
-  expect(textlintFindings(output.stderr)).toEqual(
+  expect(output.code).toBe(0);
+  expect(textlintFindings(context(output))).toEqual(
     withPath(workspace.path("work/doc.md"), FINDINGS),
   );
   output = workspace.hook(edit(workspace.path("work/a.rs"), `// ${TEXT}`));
   expect(output.code).toBe(0);
-  expect(output.stderr).toBe("");
+  expect(output.stdout).toBe("");
 });
