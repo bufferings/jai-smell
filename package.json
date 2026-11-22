@@ -7,21 +7,21 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "bun build --compile src/main.ts --asset-naming=\"[name].[ext]\" --outfile dist/jai-smell",
+    "build": "bun build --compile src/main.ts --outfile dist/jai-smell",
     "check": "biome check . && tsc --noEmit",
     "format": "biome check --write .",
     "notices": "bun scripts/third-party-notices.ts"
   },
   "dependencies": {
-    "@textlint-ja/textlint-rule-preset-ai-writing": "^1.7.0",
-    "@textlint/ast-node-types": "^16.1.1",
-    "@textlint/kernel": "^16.1.1",
-    "@textlint/markdown-to-ast": "^16.1.1",
-    "@textlint/textlint-plugin-markdown": "^16.1.1",
-    "@textlint/textlint-plugin-text": "^16.1.1",
+    "@textlint-ja/textlint-rule-preset-ai-writing": "^1.7.1",
+    "@textlint/ast-node-types": "^16.1.2",
+    "@textlint/kernel": "^16.1.2",
+    "@textlint/markdown-to-ast": "^16.1.2",
+    "@textlint/textlint-plugin-markdown": "^16.1.2",
+    "@textlint/textlint-plugin-text": "^16.1.2",
     "highlight.js": "11.12.0",
-    "kuromojin": "^3.0.2",
-    "textlint-rule-preset-ja-technical-writing": "^12.0.2"
+    "kuromojin": "^3.1.0",
+    "textlint-rule-preset-ja-technical-writing": "^12.1.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.8",

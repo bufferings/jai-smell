@@ -16,7 +16,7 @@ jai-smell は、次の 5 つの「表現のルール」を提供しています�
 
 デフォルトで適用する 3 つは、AI が生成した文章に多い表現を対象としています。`colloquial` と `prefer-hiragana` は、文書を硬い文体と表記に統一するためのルールです。統一するかどうかは文書の方針によるため、[設定](#expressions)で有効にした場合にのみ適用します。
 
-文章を形態素解析（[kuromoji](https://github.com/takuyaa/kuromoji.js) と IPADIC）によって分割した後に条件と比較するため、たとえば `穴` を検出対象に設定しても、`落とし穴` は検出されません。
+文章を形態素解析（[kuromojin](https://github.com/textlint/kuromojin) と IPADIC）によって分割した後に条件と比較するため、たとえば `穴` を検出対象に設定しても、`落とし穴` は検出されません。
 
 表現のルールに加えて、[textlint](https://textlint.org/) のルールも、設定で有効にすると適用できます。textlint の次の 2 つのプリセットのルールを使用できます。
 
@@ -462,7 +462,7 @@ tokens = [
 ]
 ```
 
-条件には、IPADIC の次の項目を指定できます。フィールド名は kuromoji に準拠しています。
+条件には、IPADIC の次の項目を指定できます。フィールド名は kuromojin に準拠しています。
 
 | フィールド | 項目 |
 | --- | --- |
@@ -564,5 +564,5 @@ MIT License です（[LICENSE](LICENSE)）。
 
 - バイナリに含まれる Bun の実行環境と、Bun が静的にリンクしている JavaScriptCore と WebKit（LGPL-2）。変更した JavaScriptCore を使用して jai-smell をビルドする方法も記載しています
 - バイナリに含まれる IPADIC
-- バイナリに含まれる npm のパッケージ（textlint、textlint のルール、kuromoji、highlight.js など）
+- バイナリに含まれる npm のパッケージ（textlint、textlint のルール、kuromojin、highlight.js など）
 - プリセットの記述にあたって参考にした [p1ass/textlint-rule-preset-ai-words-ja](https://github.com/p1ass/textlint-rule-preset-ai-words-ja)

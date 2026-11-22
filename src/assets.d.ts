@@ -1,5 +1,5 @@
 // バイナリに埋め込むファイル（with { type: "file" }）は、実行時のパスとしてインポートされる
-declare module "*.gz" {
+declare module "*.dict" {
   const path: string;
   export default path;
 }
