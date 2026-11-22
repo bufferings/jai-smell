@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  context,
   edit,
   findings,
   hook,
@@ -219,21 +220,25 @@ test("リポジトリの jai-smell.toml は、テストデータを対象外と�
 
 test("フック: Edit で追加された表現を検出する", () => {
   const output = hook(edit("/work/doc.md", "CI が走る。"));
-  expect(output.code).toBe(2);
-  expect(output.stderr).toStartWith("修正を検討すべき表現の候補を検出しました。");
-  expect(findings(output.stderr)).toEqual(['/work/doc.md:1:5: "走る"']);
+  expect(output.code).toBe(0);
+  expect(output.stderr).toBe("");
+  const json = JSON.parse(output.stdout);
+  expect(json.systemMessage).toBe("jai-smell: 1 件を検出し、Claude に通知しました");
+  expect(json.hookSpecificOutput.hookEventName).toBe("PostToolUse");
+  expect(context(output)).toStartWith("jai-smell が、今回の編集で追加・変更された部分から、");
+  expect(findings(context(output))).toEqual(['/work/doc.md:1:5: "走る"']);
 });
 
 test("フック: 検出対象の表現がない場合は、何も出力しない", () => {
   const output = hook(edit("/work/doc.md", "ビルドが速くなる。"));
   expect(output.code).toBe(0);
-  expect(output.stderr).toBe("");
+  expect(output.stdout).toBe("");
 });
 
 test("フック: Write で追加された表現を検出する", () => {
   const output = hook(write("/work/new.md", "# 見出し\n\nログを見張る。\n"));
-  expect(output.code).toBe(2);
-  expect(findings(output.stderr)).toEqual(['/work/new.md:3:4: "見張る"']);
+  expect(output.code).toBe(0);
+  expect(findings(context(output))).toEqual(['/work/new.md:3:4: "見張る"']);
 });
 
 test("フック: MultiEdit で追加された表現を検出する", () => {
@@ -247,8 +252,8 @@ test("フック: MultiEdit で追加された表現を検出する", () => {
       ],
     },
   });
-  expect(output.code).toBe(2);
-  expect(findings(output.stderr)).toEqual(['/work/doc.md:1:4: "崩す"']);
+  expect(output.code).toBe(0);
+  expect(findings(context(output))).toEqual(['/work/doc.md:1:4: "崩す"']);
 });
 
 test("フック: ソースコードはプレーンテキストとしてチェックする", () => {
@@ -268,8 +273,8 @@ test("フック: ソースコードはプレーンテキストとしてチェッ
   ];
   for (const [input, expected] of cases) {
     const output = hook(input);
-    expect(output.code).toBe(2);
-    expect(findings(output.stderr)).toEqual([expected]);
+    expect(output.code).toBe(0);
+    expect(findings(context(output))).toEqual([expected]);
   }
 });
 
@@ -318,8 +323,8 @@ test("フック: ソースコードは、編集後のファイル全体からコ
   );
   // 編集された部分のみでは、ブロックコメントの途中の行をコメントとして判定できない
   let output = workspace.hook(edit(file, " * ログを見張る。\n"));
-  expect(output.code).toBe(2);
-  expect(findings(output.stderr)).toEqual([`${file}:1:7: "見張る"`]);
+  expect(output.code).toBe(0);
+  expect(findings(context(output))).toEqual([`${file}:1:7: "見張る"`]);
   output = workspace.hook(edit(file, "const 見張る = 1;\n"));
   expect(output.code).toBe(0);
 });
@@ -332,7 +337,7 @@ test("フック: 日本語を含まないコードは検出しない", () => {
     ),
   );
   expect(output.code).toBe(0);
-  expect(output.stderr).toBe("");
+  expect(output.stdout).toBe("");
 });
 
 test("フック: 設定ファイルと rule_files のファイル自体は、チェックの対象外とする", () => {
@@ -340,7 +345,7 @@ test("フック: 設定ファイルと rule_files のファイル自体は、チ
   for (const file of [config, rules]) {
     const output = hook(edit(file, '"効く" は'), config);
     expect(output.code).toBe(0);
-    expect(output.stderr).toBe("");
+    expect(output.stdout).toBe("");
   }
 });
 
@@ -349,16 +354,16 @@ test("フック: 編集されたファイルの位置から、プロジェクト
   workspace.write("work/jai-smell.toml", 'exclude = ["tests/**"]');
   let output = workspace.hook(edit(workspace.path("work/tests/a.rs"), "// CI が走る。"));
   expect(output.code).toBe(0);
-  expect(output.stderr).toBe("");
+  expect(output.stdout).toBe("");
   output = workspace.hook(edit(workspace.path("work/src/a.rs"), "// CI が走る。"));
-  expect(output.code).toBe(2);
+  expect(output.code).toBe(0);
 });
 
 test("フック: コードは Markdown の場合にのみ対象外とする", () => {
   const text = "```\nCI が走る\n```\n\n`効く`\n";
   expect(hook(write("/work/doc.md", text)).code).toBe(0);
   const output = hook(write("/work/doc.txt", text));
-  expect(findings(output.stderr)).toEqual([
+  expect(findings(context(output))).toEqual([
     '/work/doc.txt:2:5: "走る"',
     '/work/doc.txt:5:2: "効く"',
   ]);
@@ -435,9 +440,9 @@ test("フック: 除外のコメントは、編集後のファイル全体から
   );
   let output = workspace.hook(edit(file, "// 設定を見る。\n"));
   expect(output.code).toBe(0);
-  expect(output.stderr).toBe("");
+  expect(output.stdout).toBe("");
   output = workspace.hook(edit(file, "// ログを見る。\n"));
-  expect(output.code).toBe(2);
+  expect(output.code).toBe(0);
 });
 
 test("--version と -V は、package.json のバージョンを出力する", () => {

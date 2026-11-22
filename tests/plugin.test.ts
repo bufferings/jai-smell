@@ -115,13 +115,17 @@ function check(withCommand: boolean, off = false) {
     },
     stdin: Buffer.from(JSON.stringify(input)),
   });
-  return { code: result.exitCode, stderr: result.stderr.toString() };
+  return {
+    code: result.exitCode,
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString(),
+  };
 }
 
 test("check.sh は、jai-smell の終了コードと出力を変更せずに返す", () => {
   const output = check(true);
-  expect(output.code).toBe(2);
-  expect(output.stderr).toContain('"走る"');
+  expect(output.code).toBe(0);
+  expect(output.stdout).toContain('\\"走る\\"');
 });
 
 test("check.sh は、jai-smell が PATH に存在しない場合は何も実行しない", () => {

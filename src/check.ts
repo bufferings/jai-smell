@@ -3,13 +3,10 @@ import { readFileSync, realpathSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
 import { extract, fileKind } from "./code.ts";
 import { Config } from "./config.ts";
-import type { Reply, Target } from "./hook.ts";
+import type { Target } from "./hook.ts";
 import { textRanges } from "./markdown.ts";
 import { find, tokenize } from "./matcher.ts";
 import { covers, parse as parseSuppressions } from "./suppress.ts";
-
-export const FILE_HEADING =
-  "修正を検討すべき表現の候補を検出しました。チェック対象は今回の編集で追加・変更された部分のみです（行番号はその部分の中での位置を示します）。各箇所を確認し、該当する場合のみ修正してください。";
 
 /** 設定を読み込めない場合のエラー。利用者が設定ファイルを修正するまで、チェックを実行できない */
 export class ConfigError extends Error {}
@@ -68,9 +65,13 @@ export async function checkFile(configPath: string | undefined, file: string): P
   return toFindings(text, hits);
 }
 
-/** Claude の返答が、再出力の対象かどうかを返す。設定は、作業ディレクトリから探索する */
-export function replyLacksJapanese(configPath: string | undefined, { cwd, text }: Reply): boolean {
-  const config = configFor(configPath, join(cwd, REPLY_FILE));
+/** Claude の返答に適用する設定を返す。設定は、作業ディレクトリから探索する */
+export function configForReply(configPath: string | undefined, cwd: string): Config {
+  return configFor(configPath, join(cwd, REPLY_FILE));
+}
+
+/** Claude の返答が、再出力の対象かどうかを返す */
+export function replyLacksJapanese(config: Config, text: string): boolean {
   return config.replies.japanese && lacksJapanese(text);
 }
 
@@ -118,10 +119,9 @@ export function lacksJapanese(text: string): boolean {
  * 複数の編集がある場合は空行で連結してチェックするため、行番号は連結後のテキスト内での位置になる
  */
 export async function checkWritten(
-  configPath: string | undefined,
+  config: Config,
   { filePath, parts }: Target,
 ): Promise<Finding[]> {
-  const config = configFor(configPath, filePath);
   if (skipped(filePath, config)) {
     return [];
   }

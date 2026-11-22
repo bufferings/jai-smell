@@ -6,18 +6,18 @@ import {
   checkFile,
   checkWritten,
   configFor,
-  FILE_HEADING,
+  configForReply,
   formatFinding,
   REPLY_NOT_JAPANESE,
   replyLacksJapanese,
 } from "./check.ts";
-import { reply, target } from "./hook.ts";
+import { reply, replyBlock, target, writtenContext } from "./hook.ts";
 
 const USAGE = `使い方:
   jai-smell [--config <path>] <files...>
       ファイル全体をチェックし、検出結果を path:line:col: message の形式で出力する。検出した場合は exit 1
   jai-smell hook [--config <path>]
-      Claude Code のフックの JSON を stdin から読み込む。検出した場合は結果を stderr に出力して exit 2
+      Claude Code のフックの JSON を stdin から読み込む。検出した場合は結果を JSON で stdout に出力して exit 0
       PostToolUse フックでは、今回の編集で追加・変更された部分をチェックする。
       Stop フックでは、設定ファイルの replies で有効にした場合に、Claude の返答をチェックする。
       設定を読み込めない場合は、チェックを実行せずに exit 0
@@ -152,7 +152,7 @@ async function runFiles(config: string | undefined, files: string[]): Promise<nu
 }
 
 /**
- * 検出した場合は、exit 2 と stderr で Claude にフィードバックする。
+ * 検出した場合は、exit 0 と stdout の JSON で Claude にフィードバックする。
  * 設定を読み込めない場合は、チェックを実行せずに終了する。Claude への通知は、設定ファイルを修正するまで、
  * 返答のたびに Claude の処理を追加するためである。利用者には、プラグインの Mod がステータスで表示する
  */
@@ -171,25 +171,24 @@ async function checkHookInput(config: string | undefined): Promise<number> {
   const input = await Bun.stdin.text();
   const replied = reply(input);
   if (replied !== undefined) {
-    if (!replyLacksJapanese(config, replied)) {
+    const loaded = configForReply(config, replied.cwd);
+    if (!replyLacksJapanese(loaded, replied.text)) {
       return 0;
     }
-    console.error(REPLY_NOT_JAPANESE);
-    return 2;
+    console.log(replyBlock(REPLY_NOT_JAPANESE));
+    return 0;
   }
   const written = target(input);
   if (written === undefined) {
     return 0;
   }
-  const findings = await checkWritten(config, written);
+  const loaded = configFor(config, written.filePath);
+  const findings = await checkWritten(loaded, written);
   if (findings.length === 0) {
     return 0;
   }
-  console.error(FILE_HEADING);
-  for (const finding of findings) {
-    console.error(formatFinding(written.filePath, finding));
-  }
-  return 2;
+  console.log(writtenContext(findings.map((finding) => formatFinding(written.filePath, finding))));
+  return 0;
 }
 
 async function main(): Promise<number> {

@@ -1,5 +1,6 @@
 // Claude Code のフックの入力（JSON）から、チェックの対象を抽出する。
 // PostToolUse フックでは、今回の編集で追加・変更された部分を、Stop フックでは、Claude の返答を対象とする。
+// 検出した場合の、フックの出力（JSON）も作成する。
 
 /** ファイルの編集で追加・変更された部分。MultiEdit では編集ごとに分かれる */
 export type Target = {
@@ -59,4 +60,46 @@ export function target(input: string): Target | undefined {
     return undefined;
   }
   return { filePath: toolInput.file_path, parts };
+}
+
+/**
+ * additionalContext の文字数の上限。
+ * Claude Code は、10,000 文字を超える additionalContext をファイルに保存し、Claude には先頭の一部だけを渡す。
+ * 検出結果の全体を Claude に渡すため、上限に収まる件数だけを出力する
+ */
+const CONTEXT_LIMIT = 9000;
+
+/**
+ * PostToolUse フックの出力を返す。lines は、検出結果の行である。
+ * additionalContext は Claude にだけ届き、systemMessage は利用者の画面にだけ表示される。
+ * 検出結果の詳細を使用するのは Claude のため、利用者の画面には件数だけを表示する。
+ * additionalContext は、命令ではなく事実として記述する。命令の形式の文章は、Claude が、フックの出力ではなく
+ * 外部からの指示として扱う場合があるためである
+ */
+export function writtenContext(lines: readonly string[]): string {
+  const heading = `jai-smell が、今回の編集で追加・変更された部分から、修正の候補となる表現を ${lines.length} 件検出しました。行番号は、追加・変更された部分の中での位置です。文脈に該当しない箇所は、修正の対象外です。`;
+  const shown: string[] = [];
+  let length = heading.length;
+  for (const line of lines) {
+    length += line.length + 1;
+    if (length > CONTEXT_LIMIT) {
+      break;
+    }
+    shown.push(line);
+  }
+  const omitted = lines.length - shown.length;
+  const context = [
+    heading,
+    ...shown,
+    ...(omitted > 0 ? [`残りの ${omitted} 件は、出力の上限のため省略しました。`] : []),
+  ].join("\n");
+  return JSON.stringify({
+    systemMessage: `jai-smell: ${lines.length} 件を検出し、Claude に通知しました`,
+    hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: context },
+  });
+}
+
+/** Stop フックの出力を返す。Claude は、返答を終了せず、reason に従って処理を継続する。reason は利用者の画面にも表示される */
+export function replyBlock(reason: string): string {
+  return JSON.stringify({ decision: "block", reason });
 }
