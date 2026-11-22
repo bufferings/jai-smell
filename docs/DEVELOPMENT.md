@@ -45,7 +45,7 @@ GitHub の ruleset `protect-main`（対象はデフォルトブランチ）で�
 
 ## リリースの手順
 
-1. バージョンを更新するプルリクエストを作成する。`package.json` の `version` と、`plugin/.claude-plugin/plugin.json` の `version` を、同じ番号に更新する。コミットメッセージは `バージョンを X.Y.Z に更新する` とする。Claude Code は、プラグインのバージョンが変更されない場合に、キャッシュしたプラグインを使用するため、プラグインを変更していないリリースでも両方を更新する
+1. バージョンを更新するプルリクエストを作成する。`package.json` の `version` と、`plugin/.claude-plugin/plugin.json` の `version` を、同じ番号に更新する。コミットメッセージは、タグのメッセージと同じ `Release X.Y.Z` とする。Claude Code は、プラグインのバージョンが変更されない場合に、キャッシュしたプラグインを使用するため、プラグインを変更していないリリースでも両方を更新する
 2. プルリクエストの差分、コミットメッセージ、前のタグからのコミットに、個人の情報が含まれていないことを確認する
 3. 「変更の手順」に従ってマージする
 4. マージ後の main に、注釈付きのタグ `vX.Y.Z` を作成してプッシュする。`.github/workflows/release.yml` が、タグと `package.json` の `version` の一致を確認し、テストとビルドを実行して、`jai-smell-X.Y.Z-arm64.tar.gz` を添付した下書きのリリースを作成する
