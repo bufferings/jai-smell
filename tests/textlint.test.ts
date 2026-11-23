@@ -278,3 +278,27 @@ test("フック: 追加・変更された部分に、ルールを適用する", 
   expect(output.code).toBe(0);
   expect(output.stdout).toBe("");
 });
+
+test("冗長な表現は、段落をまたいで検出しない", () => {
+  const workspace = new Workspace("textlint-redundant-paragraph");
+  workspace.write("work/jai-smell.toml", ENABLED);
+  // 段落の末尾の「することができる」を、次の段落の先頭の単語と合わせて検出しない
+  const paragraphs = workspace.write(
+    "work/paragraphs.md",
+    "改善を実現することができる\n\nデータベースの負荷を軽減する\n",
+  );
+  expect(textlintFindings(workspace.run([paragraphs]).stdout)).toEqual([]);
+  const items = workspace.write(
+    "work/items.md",
+    "- 改善を実現することができる\n- データベースの負荷を軽減する\n",
+  );
+  expect(textlintFindings(workspace.run([items]).stdout)).toEqual([]);
+  // 段落の中に後続の単語がある場合は、その段落の行で検出する
+  const period = workspace.write(
+    "work/period.md",
+    "- 改善を実現することができる。\n- データベースの負荷を軽減する\n",
+  );
+  expect(textlintFindings(workspace.run([period]).stdout)).toEqual(
+    withPath(period, ["1:8: ja-no-redundant-expression"]),
+  );
+});
