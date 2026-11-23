@@ -71,7 +71,7 @@ const CONTEXT_LIMIT = 9000;
 
 /**
  * PostToolUse フックの出力を返す。lines は、検出結果の行である。
- * additionalContext は Claude にだけ届き、systemMessage は利用者の画面にだけ表示される。
+ * Claude Code は、additionalContext を Claude にだけ渡し、systemMessage を利用者の画面にだけ表示する。
  * 検出結果の詳細を使用するのは Claude のため、利用者の画面には件数だけを表示する。
  * additionalContext は、命令ではなく事実として記述する。命令の形式の文章は、Claude が、フックの出力ではなく
  * 外部からの指示として扱う場合があるためである

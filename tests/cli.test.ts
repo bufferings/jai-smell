@@ -146,7 +146,7 @@ test("config は、読み込んだ設定ファイルと、ファイルに適用�
   expect(output.stdout).toContain(project);
   expect(output.stdout).toContain("適用しないルール: metaphor（比喩）");
   expect(output.stdout).toContain("追加のルールセット: テスト");
-  expect(output.stdout).toContain("適用しないルール: max-ten、no-mix-dearu-desumasu");
+  expect(output.stdout).toContain("適用しないルール: max-ten、no-ai-list-formatting");
   output = workspace.run(["config", workspace.path("work/a.rs")]);
   expect(output.stdout).toContain("textlint: 適用しません");
   output = workspace.run(["config", workspace.path("work/skip/doc.md")]);
