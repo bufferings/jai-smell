@@ -15,8 +15,8 @@ const CODE_FINDINGS = ["1:17: max-ten", "3:14: no-double-negative-ja"];
 /** textlint のルールを有効にする設定 */
 const ENABLED = "[textlint]\nenabled = true\n";
 
-test("使用できるルールは、2 つのプリセットの 28 件である", () => {
-  expect(RULE_NAMES.length).toBe(28);
+test("使用できるルールは、13 件である", () => {
+  expect(RULE_NAMES.length).toBe(13);
   expect(RULE_NAMES).toContain("max-ten");
   expect(RULE_NAMES).toContain("no-doubled-joshi");
   expect(RULE_NAMES).toContain("no-ai-list-formatting");
@@ -34,7 +34,7 @@ const AI_WRITING = `${ENABLED}[textlint.rules]\n${[
   .map((name) => `${name} = true\n`)
   .join("")}`;
 
-test("AI が生成した文章に多い記述のルールは、設定で有効にした場合にのみ適用する", () => {
+test("技術文書で一般的な記述も検出するルールは、設定で有効にした場合にのみ適用する", () => {
   const workspace = new Workspace("textlint-ai-writing");
   workspace.write("work/jai-smell.toml", ENABLED);
   const doc = workspace.write(
@@ -54,9 +54,8 @@ test("AI が生成した文章に多い記述のルールは、設定で有効�
       "",
     ].join("\n"),
   );
-  // 文末のコロンは、ja-no-mixed-period が検出する
   expect(textlintFindings(workspace.run([doc]).stdout)).toEqual(
-    withPath(doc, ["3:13: ja-no-mixed-period"]),
+    withPath(doc, ["1:11: no-ai-hype-expressions", "11:3: ai-tech-writing-guideline"]),
   );
   workspace.write("work/jai-smell.toml", AI_WRITING);
   expect(textlintFindings(workspace.run([doc]).stdout)).toEqual(
@@ -64,7 +63,6 @@ test("AI が生成した文章に多い記述のルールは、設定で有効�
       // 太字の接頭辞は no-ai-emphasis-patterns も検出するため、no-ai-list-formatting の検出結果のみを出力する
       "1:1: no-ai-list-formatting",
       "1:11: no-ai-hype-expressions",
-      // 文末のコロンは ja-no-mixed-period も検出するため、no-ai-colon-continuation の検出結果のみを出力する
       "3:13: no-ai-colon-continuation",
       "9:4: no-ai-emphasis-patterns",
       "11:3: ai-tech-writing-guideline",
@@ -102,10 +100,14 @@ test("絵文字の後でルールの報告する位置がずれる場合も、�
   );
 });
 
-test("文体の混在は、no-mix-dearu-desumasu を有効にした場合にのみ検出する", () => {
+test("文体の混在は、no-mix-dearu-desumasu の検出結果のみを出力する", () => {
   const workspace = new Workspace("textlint-style-guideline");
   workspace.write("work/jai-smell.toml", AI_WRITING);
   const doc = workspace.write("work/doc.md", "これは文です。あれは文である。\n");
+  expect(textlintFindings(workspace.run([doc]).stdout)).toEqual(
+    withPath(doc, ["1:12: no-mix-dearu-desumasu"]),
+  );
+  workspace.write("work/jai-smell.toml", `${AI_WRITING}no-mix-dearu-desumasu = false\n`);
   expect(workspace.run([doc]).stdout).toBe("");
 });
 
@@ -118,10 +120,10 @@ test("「大幅に改善」は、no-ai-hype-expressions の検出結果のみを
   );
 });
 
-test("rules の設定を、プリセットのデフォルトの設定に上書きする", () => {
-  const rules = resolveRules({ "max-ten": false, "sentence-length": { max: 120 } });
+test("rules の設定を、デフォルトの設定に上書きする", () => {
+  const rules = resolveRules({ "max-ten": false, "max-comma": { max: 4 } });
   expect(rules["max-ten"]).toBe(false);
-  expect(rules["sentence-length"]).toEqual({ max: 120 });
+  expect(rules["max-comma"]).toEqual({ max: 4 });
   expect(rules["no-doubled-joshi"]).toBeDefined();
   expect(Object.keys(rules).sort()).toEqual([...RULE_NAMES].sort());
   // true を指定したルールは、ルールのデフォルトのオプションで適用する
@@ -187,7 +189,7 @@ test("ソースコードでは、コメントにのみルールを適用する",
     [
       // コードの括弧、?、カンマは検出しない
       'fn main() { let x = f(a, b, c, d, e)?; if x { g("確認できないわけではない。") } }',
-      // 連続する行コメントは、1 つの文章として扱う。文末の句点がないことは検出しない
+      // 連続する行コメントは、1 つの文章として扱う
       "// 確認できない",
       "// わけではない",
       "",
@@ -197,25 +199,14 @@ test("ソースコードでは、コメントにのみルールを適用する",
   const unknown = workspace.write("work/a.unknown", TEXT);
   const output = workspace.run([src, unknown]);
   expect(textlintFindings(output.stdout)).toEqual(withPath(src, ["3:8: no-double-negative-ja"]));
-  // 文末の句点のルールは、設定に記述した場合は、コメントにも適用する
-  workspace.write(
-    "work/jai-smell.toml",
-    `${ENABLED}include = ["**/*.rs"]\n[textlint.rules]\nja-no-mixed-period = true\n`,
-  );
-  expect(textlintFindings(workspace.run([src]).stdout)).toContain(`${src}:3:9: ja-no-mixed-period`);
 });
 
-test("文体の統一のルールは、設定で有効にした場合にのみ適用する", () => {
+test("文体の統一のルールは、多いほうの文体と異なる文を検出する", () => {
   const workspace = new Workspace("textlint-style");
   workspace.write("work/jai-smell.toml", ENABLED);
   const doc = workspace.write(
     "work/doc.md",
     "本文です。\n\n- 項目です。\n- 項目です。\n- 項目である。\n",
-  );
-  expect(workspace.run([doc]).stdout).toBe("");
-  workspace.write(
-    "work/jai-smell.toml",
-    `${ENABLED}[textlint.rules]\nno-mix-dearu-desumasu = true\n`,
   );
   expect(textlintFindings(workspace.run([doc]).stdout)).toEqual(
     withPath(doc, ["5:5: no-mix-dearu-desumasu"]),
@@ -224,10 +215,7 @@ test("文体の統一のルールは、設定で有効にした場合にのみ�
 
 test("文体の統一のルールは、箇条書きの文体が本文と同じ文書を検出しない", () => {
   const workspace = new Workspace("textlint-style-unified");
-  workspace.write(
-    "work/jai-smell.toml",
-    `${ENABLED}[textlint.rules]\nno-mix-dearu-desumasu = true\n`,
-  );
+  workspace.write("work/jai-smell.toml", ENABLED);
   const doc = workspace.write("work/doc.md", "本文です。\n\n- 項目です。\n- 項目です。\n");
   expect(workspace.run([doc]).stdout).toBe("");
 });

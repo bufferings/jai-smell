@@ -1,6 +1,7 @@
-// textlint のルールの実行。textlint 本体（@textlint/kernel）と、次の 2 つのプリセットのルールを使用する。
-// - textlint-rule-preset-ja-technical-writing: 技術文書の文章のルール。
-// - @textlint-ja/textlint-rule-preset-ai-writing: AI が生成した文章に多い記述のルール。
+// textlint のルールの実行。textlint 本体（@textlint/kernel）と、次のルールを使用する。
+// - 技術文書の文章のルール（8 件）。ルールごとのパッケージを使用する。
+//   デフォルトのオプションは、textlint-rule-preset-ja-technical-writing 12.1.0 の指定と同じ値である。
+// - @textlint-ja/textlint-rule-preset-ai-writing: AI が生成した文章に多い記述のルール（5 件）。
 //
 // textlint のコマンドは、設定ファイルに記述された名前からルールのパッケージを実行時に読み込む。
 // バイナリにはビルド時に参照が確定したコードのみが含まれるため、ルールを明示的にインポートして kernel に指定する。
@@ -9,7 +10,14 @@ import { TextlintKernel } from "@textlint/kernel";
 import markdownPlugin from "@textlint/textlint-plugin-markdown";
 import textPlugin from "@textlint/textlint-plugin-text";
 import aiWriting from "@textlint-ja/textlint-rule-preset-ai-writing";
-import technicalWriting from "textlint-rule-preset-ja-technical-writing";
+import jaNoRedundantExpression from "textlint-rule-ja-no-redundant-expression";
+import maxComma from "textlint-rule-max-comma";
+import maxTen from "textlint-rule-max-ten";
+import noDoubleNegativeJa from "textlint-rule-no-double-negative-ja";
+import noDoubledConjunction from "textlint-rule-no-doubled-conjunction";
+import noDoubledConjunctiveParticleGa from "textlint-rule-no-doubled-conjunctive-particle-ga";
+import noDoubledJoshi from "textlint-rule-no-doubled-joshi";
+import noMixDearuDesumasu from "textlint-rule-no-mix-dearu-desumasu";
 
 type Preset = {
   rules: Record<string, unknown>;
@@ -20,8 +28,35 @@ type Preset = {
 const unwrap = <T>(module: unknown): T =>
   ((module as { default?: unknown })?.default ?? module) as T;
 
-// ルールの名前は 2 つのプリセットで重複しないため、1 つにまとめて名前だけで指定できるようにする
-const PRESETS = [unwrap<Preset>(technicalWriting), unwrap<Preset>(aiWriting)];
+/** 技術文書の文章のルールと、デフォルトのオプション */
+const TECHNICAL_WRITING: Preset = {
+  rules: {
+    "max-comma": maxComma,
+    "max-ten": maxTen,
+    "no-mix-dearu-desumasu": noMixDearuDesumasu,
+    "no-doubled-conjunction": noDoubledConjunction,
+    "no-doubled-conjunctive-particle-ga": noDoubledConjunctiveParticleGa,
+    "no-double-negative-ja": noDoubleNegativeJa,
+    "no-doubled-joshi": noDoubledJoshi,
+    "ja-no-redundant-expression": jaNoRedundantExpression,
+  },
+  rulesConfig: {
+    "max-comma": { max: 3 },
+    "max-ten": { max: 3 },
+    // 見出し、本文、箇条書きのそれぞれで、多いほうの文体に統一する。
+    // 文体を固定する指定（本文は「ですます」調、箇条書きは「である」調）では、
+    // 文体が統一されている文書でも、箇条書きが「ですます」調の場合に検出されるためである。
+    "no-mix-dearu-desumasu": { preferInHeader: "", preferInBody: "", preferInList: "" },
+    "no-doubled-conjunction": true,
+    "no-doubled-conjunctive-particle-ga": true,
+    "no-double-negative-ja": true,
+    "no-doubled-joshi": { min_interval: 1 },
+    "ja-no-redundant-expression": true,
+  },
+};
+
+// ルールの名前は重複しないため、1 つにまとめて名前だけで指定できるようにする
+const PRESETS = [TECHNICAL_WRITING, unwrap<Preset>(aiWriting)];
 const PRESET: Preset = {
   rules: Object.assign({}, ...PRESETS.map(({ rules }) => rules)),
   rulesConfig: Object.assign({}, ...PRESETS.map(({ rulesConfig }) => rulesConfig)),
@@ -29,12 +64,11 @@ const PRESET: Preset = {
 
 /**
  * 同じ箇所を 2 つのルールが検出する組。後のルールの検出結果を出力しない。
- * 冗長な表現（「〜することが可能」の類）、文末のコロン、変化の程度を数値で示していない表現、
+ * 冗長な表現（「〜することが可能」の類）、変化の程度を数値で示していない表現、
  * リスト項目の先頭の絵文字と太字が該当する
  */
 const DUPLICATES = [
   ["ja-no-redundant-expression", "ai-tech-writing-guideline"],
-  ["no-ai-colon-continuation", "ja-no-mixed-period"],
   ["no-ai-hype-expressions", "ai-tech-writing-guideline"],
   ["no-ai-list-formatting", "no-ai-emphasis-patterns"],
 ] as const;
@@ -64,20 +98,10 @@ function sameSpot(text: string, a: Span, b: Span): boolean {
 // - enableDocumentAnalysis: 文書全体の検出件数の集計を、ファイルの先頭の位置に報告する機能である。
 //   特定の箇所の検出結果ではないため、出力しない。
 // - disableConsistencyGuidance: 用語と文体の一貫性の分類は、「です」と「である」の混在を検出する。
-//   文体の混在は no-mix-dearu-desumasu を有効にした場合にだけ検出するため、この分類は適用しない。
+//   文体の混在は no-mix-dearu-desumasu で検出するため、この分類は適用しない。
 PRESET.rulesConfig["ai-tech-writing-guideline"] = {
   enableDocumentAnalysis: false,
   disableConsistencyGuidance: true,
-};
-
-// no-mix-dearu-desumasu のデフォルトのオプション。
-// 見出し、本文、箇条書きのそれぞれで、多いほうの文体に統一する。
-// プリセットの指定（本文は「ですます」調、箇条書きは「である」調）では、
-// 文体が統一されている文書でも、箇条書きが「ですます」調の場合に検出されるためである。
-PRESET.rulesConfig["no-mix-dearu-desumasu"] = {
-  preferInHeader: "",
-  preferInBody: "",
-  preferInList: "",
 };
 
 /** 使用できるルールの名前 */
@@ -92,7 +116,7 @@ export type TextlintHit = {
 
 /**
  * 設定ファイルの rules を検証し、デフォルトの設定に上書きした結果を返す。
- * 値が false のルールは無効、true のルールはプリセットのデフォルトの設定、テーブルのルールはそのオプションで実行する
+ * 値が false のルールは無効、true のルールはデフォルトのオプション、テーブルのルールはそのオプションで実行する
  */
 export function resolveRules(rules: Record<string, unknown>): Record<string, unknown> {
   const resolved: Record<string, unknown> = { ...PRESET.rulesConfig };

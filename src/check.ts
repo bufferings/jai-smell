@@ -207,9 +207,6 @@ function skipped(file: string, config: Config): boolean {
   return config.paths.some((path) => sameFile(file, path));
 }
 
-/** 文末の句点の有無など、コードのコメントには適さないため、設定に記述していない場合は、コメントに適用しないルール */
-const RULES_NOT_FOR_COMMENTS = ["ja-no-mixed-period"];
-
 /** チェックの対象とする文章。offsetOf は、text 内の位置を、ファイルのテキスト内の位置に変換する */
 type Part = { text: string; offsetOf: (index: number) => number };
 
@@ -294,25 +291,15 @@ async function findHits(config: Config, file: string, text: string): Promise<Hit
   if (applyTextlint && prepared.textlint && prepared.textlint.text !== "") {
     // textlint とルールの読み込みには時間を要するため、適用する場合にのみ読み込む
     const textlint = await import("./textlint.ts");
-    const items = { ...config.textlint.items };
-    if (prepared.textlint.comments) {
-      for (const name of RULES_NOT_FOR_COMMENTS) {
-        items[name] ??= false;
-      }
-    }
-    const rules = textlint.resolveRules(items);
+    const rules = textlint.resolveRules(config.textlint.items);
     for (const hit of await textlint.lint(
       prepared.textlint.text,
       prepared.textlint.markdown,
       rules,
     )) {
-      // sentence-length のメッセージの行番号は、コメントを連結した文章の中での位置のため、コメントの場合は出力しない
-      const message = prepared.textlint.comments
-        ? hit.message.replace(/^Line \d+ sentence length/, "Sentence length")
-        : hit.message;
       hits.push({
         offset: prepared.textlint.offsetOf(hit.offset),
-        message: `${message}（textlint: ${hit.ruleName}）`,
+        message: `${hit.message}（textlint: ${hit.ruleName}）`,
         ruleName: hit.ruleName,
       });
     }

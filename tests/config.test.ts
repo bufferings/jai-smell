@@ -17,11 +17,8 @@ const ALL = ["translationese", "metaphor", "colloquial", "unusual-terms", "prefe
 
 /** デフォルトでは無効にする textlint のルール */
 const TEXTLINT_OFF = {
-  "no-mix-dearu-desumasu": false,
   "no-ai-list-formatting": false,
-  "no-ai-hype-expressions": false,
   "no-ai-emphasis-patterns": false,
-  "ai-tech-writing-guideline": false,
   "no-ai-colon-continuation": false,
 };
 
@@ -156,13 +153,13 @@ test("expressions.rules の不明な名前は、警告としてチェックを�
 
 test("textlint は、キーごと、およびルールの名前ごとに、後の設定ファイルの値を使用する", () => {
   let config = layered(
-    "[textlint.rules]\nmax-ten = false\nsentence-length = { max = 120 }\n",
-    '[textlint]\nenabled = true\ninclude = ["docs/**"]\n[textlint.rules]\nsentence-length = { skipPatterns = [] }\n',
+    "[textlint.rules]\nmax-ten = false\nmax-comma = { max = 4 }\n",
+    '[textlint]\nenabled = true\ninclude = ["docs/**"]\n[textlint.rules]\nmax-comma = { max = 5 }\n',
   );
   expect(config.textlint.items).toEqual({
     ...TEXTLINT_OFF,
     "max-ten": false,
-    "sentence-length": { skipPatterns: [] },
+    "max-comma": { max: 5 },
   });
   // include を記述した場合は、デフォルトの .md と .txt に代えて使用する
   expect(config.appliesTextlintTo("/repo/docs/a.rs")).toBe(true);

@@ -18,10 +18,10 @@ jai-smell は、次の 5 つの「表現のルール」を提供しています�
 
 文章を形態素解析（[kuromojin](https://github.com/textlint/kuromojin) と IPADIC）によって分割した後に条件と比較するため、たとえば `穴` を検出対象に設定しても、`落とし穴` は検出されません。
 
-表現のルールに加えて、[textlint](https://textlint.org/) のルールも、設定で有効にすると適用できます。textlint の次の 2 つのプリセットのルールを使用できます。
+表現のルールに加えて、[textlint](https://textlint.org/) のルールも、設定で有効にすると適用できます。textlint の次のルールを使用できます。
 
-- [textlint-rule-preset-ja-technical-writing](https://github.com/textlint-ja/textlint-rule-preset-ja-technical-writing)：同じ助詞の重複、1 文の長さ、読点の数、二重否定などを検出します。
-- [@textlint-ja/textlint-rule-preset-ai-writing](https://github.com/textlint-ja/textlint-rule-preset-ai-writing)：AI が生成した文章に多い記述を検出します。リスト項目の先頭の太字と絵文字、誇張表現、コロンで終わる文などが対象です。ルールごとに、設定で有効にした場合にのみ適用します。
+- [textlint-rule-preset-ja-technical-writing](https://github.com/textlint-ja/textlint-rule-preset-ja-technical-writing) が採用しているルールのうち 8 件：同じ助詞の重複、読点の数、二重否定などを検出します。
+- [@textlint-ja/textlint-rule-preset-ai-writing](https://github.com/textlint-ja/textlint-rule-preset-ai-writing)：AI が生成した文章に多い記述を検出します。リスト項目の先頭の太字と絵文字、誇張表現、コロンで終わる文などが対象です。技術文書で一般的な記述も検出するルールは、ルールの名前を指定して有効にします。
 
 textlint とルールは jai-smell のバイナリに含まれているため、Node.js と textlint のインストールは不要です。
 
@@ -51,13 +51,13 @@ docs/ci.md:5:9: "落とし穴" は、物事を別のものにたとえた比喩�
 textlint のルールは、次のプロジェクトのものを変更せずに使用しています。
 
 - [textlint](https://github.com/textlint/textlint)（MIT License）
-- [textlint-ja/textlint-rule-preset-ja-technical-writing](https://github.com/textlint-ja/textlint-rule-preset-ja-technical-writing)（MIT License）
+- [textlint-ja/textlint-rule-preset-ja-technical-writing](https://github.com/textlint-ja/textlint-rule-preset-ja-technical-writing)（MIT License）が採用しているルールのうち 8 件。ルールごとのパッケージ（MIT License）を使用し、デフォルトのオプションは、このプリセットの指定と同じです
 - [textlint-ja/textlint-rule-preset-ai-writing](https://github.com/textlint-ja/textlint-rule-preset-ai-writing)（MIT License）
 
 ## 動作環境
 
 - macOS（Apple Silicon）。ビルド済みバイナリは、この環境向けのみ提供しています。その他の環境では、ソースからビルドしてください。
-- バイナリのサイズは約 114 MB です。JavaScript の実行環境（Bun）、textlint とルール、形態素解析の辞書を含みます。
+- バイナリのサイズは約 99 MB です。JavaScript の実行環境（Bun）、textlint とルール、形態素解析の辞書を含みます。
 - フックとして利用する場合は、[Claude Code](https://docs.claude.com/ja/docs/claude-code/overview) が必要です。
 
 ## インストール
@@ -291,8 +291,8 @@ include = ["**/*.md", "**/*.txt", "**/*.ts"]
 exclude = ["docs/archive/**"]
 
 [textlint.rules]
-sentence-length = { max = 120 }
-no-exclamation-question-mark = false
+max-ten = { max = 4 }
+no-doubled-joshi = false
 no-ai-list-formatting = true
 
 # Claude の返答のチェックの設定
@@ -356,9 +356,9 @@ $ jai-smell config docs/blog/post.md
     適用しないルール: metaphor（比喩）、prefer-hiragana（漢字をひらく）
   追加のルールセット: 表記の統一
   textlint:
-    適用するルール: sentence-length、max-comma、…
-    適用しないルール: no-mix-dearu-desumasu
-    オプション: sentence-length = {"max":150}
+    適用するルール: max-comma、max-ten、…
+    適用しないルール: no-ai-list-formatting、no-ai-emphasis-patterns、no-ai-colon-continuation
+    オプション: max-ten = {"max":4}
 
 Claude の返答のチェック（replies）:
   japanese（大部分が英語の返答の検出）: 適用しない
@@ -481,10 +481,10 @@ tokens = [
 
 ### textlint
 
-textlint のルールの設定を指定します。使用できるルールは、textlint の次の 2 つのプリセットのルールです。
+textlint のルールの設定を指定します。使用できるルールは、次の 13 件です。`jai-smell config <file>` の出力でも確認できます。
 
-- `textlint-rule-preset-ja-technical-writing`
-- `@textlint-ja/textlint-rule-preset-ai-writing`
+- `textlint-rule-preset-ja-technical-writing` が採用しているルールのうち、文の構成と表現を対象とする 8 件。デフォルトのオプションは、このプリセットの指定と同じです
+- `@textlint-ja/textlint-rule-preset-ai-writing` の 5 件
 
 textlint のルールは、`enabled` に `true` を指定した場合にのみ適用します。文体の好みに依存するルールを含むことと、文章ではない `.txt` のファイルでも検出することが理由です。
 
@@ -501,9 +501,9 @@ enabled = true
 include = ["**/*.md", "**/*.txt", "**/*.ts", "**/*.py"]
 
 [textlint.rules]
-sentence-length = { max = 120 }
-no-exclamation-question-mark = false
-no-mix-dearu-desumasu = true
+max-ten = { max = 4 }
+no-doubled-joshi = false
+no-mix-dearu-desumasu = false
 no-ai-list-formatting = true
 no-ai-hype-expressions = { allows = ["完全に"] }
 ```
@@ -517,16 +517,14 @@ no-ai-hype-expressions = { allows = ["完全に"] }
 
 - どのフィールドも、チェック対象のファイルに近い設定ファイルの値を使用します。`include` と `exclude` は配列全体を、`rules` のオプションはルールごとにテーブル全体を置き換えます。
 - `include` を記述した場合は、デフォルトの `.md` と `.txt` に代えて使用します。
-- ソースコードを `include` に指定した場合は、コメントに適用します。文末の句点のルール（`ja-no-mixed-period`）は、`rules` に記述した場合にのみ、コメントに適用します。コメントでは、文末の句点を省略する書き方が一般的なためです。
-- `no-mix-dearu-desumasu`（「である」調と「ですます」調の混在）は、`true` またはオプションを指定した場合にのみ適用します。`true` を指定した場合は、見出し、本文、箇条書きのそれぞれで、多いほうの文体に統一します（`preferInHeader = ""`、`preferInBody = ""`、`preferInList = ""`）。文体を固定する場合は、オプションに `"である"` または `"ですます"` を指定します。
-- AI が生成した文章に多い記述のルールも、`true` またはオプションを指定した場合にのみ適用します。コードブロックの前のコロンや `- **項目**: 説明` の形式のリストなど、人間が記述した技術文書でも一般的な記述を多く検出するためです。対象は次の 5 件です。
+- ソースコードを `include` に指定した場合は、コメントに適用します。
+- `no-mix-dearu-desumasu`（「である」調と「ですます」調の混在）は、見出し、本文、箇条書きのそれぞれで、多いほうの文体に統一します（`preferInHeader = ""`、`preferInBody = ""`、`preferInList = ""`）。文体を固定する場合は、オプションに `"である"` または `"ですます"` を指定します。
+- 次の 3 件は、`true` またはオプションを指定した場合にのみ適用します。コードブロックの前のコロンや `- **項目**: 説明` の形式のリストなど、人間が記述した技術文書でも一般的な記述を検出するためです。
   - `no-ai-list-formatting`
-  - `no-ai-hype-expressions`
   - `no-ai-emphasis-patterns`
-  - `ai-tech-writing-guideline`
   - `no-ai-colon-continuation`
-- `ai-tech-writing-guideline` に `true` を指定した場合は、`enableDocumentAnalysis = false` と `disableConsistencyGuidance = true` を指定して適用します。文書全体の検出件数の集計は、特定の箇所の検出結果ではないため、出力しません。文体の混在は、`no-mix-dearu-desumasu` を有効にした場合にのみ検出します。
-- 同じ箇所を 2 つのルールが検出する場合は、片方の検出結果のみを出力します。`することができます` は、`ja-no-redundant-expression` の検出結果を出力します。文末のコロンは、`no-ai-colon-continuation` の検出結果を出力します。`大幅に改善` などの定量化されていない表現は、`no-ai-hype-expressions` の検出結果を出力します。リスト項目の先頭の絵文字と太字は、`no-ai-list-formatting` の検出結果を出力します。
+- `ai-tech-writing-guideline` は、`enableDocumentAnalysis = false` と `disableConsistencyGuidance = true` を指定して適用します。文書全体の検出件数の集計は、特定の箇所の検出結果ではないため、出力しません。文体の混在は、`no-mix-dearu-desumasu` で検出します。
+- 同じ箇所を 2 つのルールが検出する場合は、片方の検出結果のみを出力します。`することができます` は、`ja-no-redundant-expression` の検出結果を出力します。`大幅に改善` などの定量化されていない表現は、`no-ai-hype-expressions` の検出結果を出力します。リスト項目の先頭の絵文字と太字は、`no-ai-list-formatting` の検出結果を出力します。
 - ルールの名前とオプションは、[textlint-rule-preset-ja-technical-writing の README](https://github.com/textlint-ja/textlint-rule-preset-ja-technical-writing#readme) を参照してください。AI が生成した文章に多い記述のルールは、[@textlint-ja/textlint-rule-preset-ai-writing の README](https://github.com/textlint-ja/textlint-rule-preset-ai-writing#readme) を参照してください。ルールの名前は、プリセットの名前を付けずに記述します。
 - 使用できるルールは、バイナリに含まれているものに限られます。textlint の他のルールは追加できません。
 

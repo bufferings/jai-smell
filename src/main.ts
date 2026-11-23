@@ -35,7 +35,7 @@ const USAGE = `使い方:
 設定ファイルがない場合は、表現のルールをすべてのファイルに適用する。
 表現のルールのうち、colloquial（話し言葉）と prefer-hiragana（漢字をひらく）は、設定ファイルの expressions.rules に
 true を指定した場合に適用する。
-textlint のルール（textlint-rule-preset-ja-technical-writing と @textlint-ja/textlint-rule-preset-ai-writing）は、
+textlint のルール（技術文書の文章のルールと、@textlint-ja/textlint-rule-preset-ai-writing のルール）は、
 設定ファイルの textlint.enabled に true を指定した場合に適用する。適用するファイルのデフォルトは、.md と .txt である。
 
 設定は、~/.config/jai-smell/jai-smell.toml（ユーザー全体の設定）、チェック対象のファイルの上位のディレクトリにある

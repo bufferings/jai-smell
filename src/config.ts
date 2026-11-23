@@ -41,19 +41,13 @@ const TEXTLINT_INCLUDE = ["**/*.md", "**/*.txt"];
 const EXPRESSION_RULES: Record<string, unknown> = { colloquial: false, "prefer-hiragana": false };
 
 /**
- * textlint のプリセットのデフォルトでは有効で、jai-smell のデフォルトでは無効にする textlint のルール。設定で有効にした場合にのみ適用する。
- *
- * no-mix-dearu-desumasu は、引用や例文で文体が異なる文書でも検出するためである。
- *
- * AI が生成した文章に多い記述のルール（5 件）は、人間が記述した技術文書でも一般的な記述を多く検出するためである。
- * コードブロックの前のコロン、「- **項目**: 説明」の形式のリスト、義務を示す表現などが該当する。
+ * textlint のルールのうち、設定で有効にした場合にのみ適用するもの。
+ * 人間が記述した技術文書でも一般的な記述を検出するためである。対象は、「- **項目**: 説明」の形式のリスト、
+ * 見出しの中の太字、コードブロックの前のコロンである。その他のルールは、textlint を有効にすると適用する
  */
 const TEXTLINT_RULES: Record<string, unknown> = {
-  "no-mix-dearu-desumasu": false,
   "no-ai-list-formatting": false,
-  "no-ai-hype-expressions": false,
   "no-ai-emphasis-patterns": false,
-  "ai-tech-writing-guideline": false,
   "no-ai-colon-continuation": false,
 };
 

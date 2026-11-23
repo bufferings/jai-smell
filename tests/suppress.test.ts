@@ -43,6 +43,6 @@ test("除外のコメントに類似した文字列は、除外のコメント�
 test("textlint のルールの検出結果は、ルールの名前で対象外とする", () => {
   const text = "<!-- jai-smell-disable-next-line max-ten -->\n一、二、三、四、五。\n";
   expect(covered(text, "一", "max-ten")).toEqual([true]);
-  expect(covered(text, "一", "sentence-length")).toEqual([false]);
+  expect(covered(text, "一", "max-comma")).toEqual([false]);
   expect(covered(text, "一")).toEqual([false]);
 });
